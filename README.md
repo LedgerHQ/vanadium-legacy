@@ -27,7 +27,7 @@ For end-users, it means that there's no restrictions on the number of apps since
 A few apps are available in the [app/](app/) folder:
 
 - [app-rust/](app-rust/): also implements some features of the Exchange app, in Rust.
-- 2 SDKs are available, a [C SDK](app/sdk/) and a [Rust SDK](exapp-sdk/).
+- A [Rust SDK](rust-sdk/) is available.
 
 The Nano RISC-V VM app is in [vm/](vm/) and Python tools to interact with the VM app are in [host/](host/).
 

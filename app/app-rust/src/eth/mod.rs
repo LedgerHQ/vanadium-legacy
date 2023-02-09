@@ -8,7 +8,7 @@ use hex_literal::hex;
 
 use currency::*;
 use error::*;
-use exapp_sdk::crypto::*;
+use vanadium_sdk::crypto::*;
 
 pub struct Eth {}
 

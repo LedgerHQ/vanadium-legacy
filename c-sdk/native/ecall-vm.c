@@ -7,7 +7,7 @@
 #include "crypto.h"
 #include "ecall-vm.h"
 #include "ecall.h"
-#include "sdk/sdk.h"
+#include "sdk.h"
 
 #include "../../../vm/src/ecall_hash.h"
 

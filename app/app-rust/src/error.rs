@@ -1,7 +1,7 @@
 use alloc::string::{String, ToString};
 use alloc::{fmt, format};
 
-use exapp_sdk::SdkError;
+use vanadium_sdk::SdkError;
 
 #[derive(Debug)]
 pub struct AppError {

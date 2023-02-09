@@ -8,7 +8,7 @@ extern crate hex_literal;
 extern crate primitive_types;
 extern crate quick_protobuf;
 extern crate serde;
-extern crate exapp_sdk;
+extern crate vanadium_sdk;
 
 #[cfg(not(target_arch = "riscv32"))]
 extern crate core;
@@ -36,7 +36,7 @@ use message::message::mod_Response::OneOfresponse;
 use message::message::*;
 use swap::*;
 
-use exapp_sdk::fatal;
+use vanadium_sdk::fatal;
 
 #[cfg(test)]
 use hex_literal::hex;
@@ -138,15 +138,15 @@ pub extern "C" fn main() {
     version::setup_app();
 
     loop {
-        exapp_sdk::ux::ux_idle();
+        vanadium_sdk::ux::ux_idle();
 
-        let buffer = exapp_sdk::xrecv(512);
+        let buffer = vanadium_sdk::xrecv(512);
 
-        exapp_sdk::ux::app_loading_start("Handling request...\x00");
+        vanadium_sdk::ux::app_loading_start("Handling request...\x00");
 
         let result = handle_req(&buffer);
-        exapp_sdk::xsend(&result);
+        vanadium_sdk::xsend(&result);
 
-        exapp_sdk::ux::app_loading_stop();
+        vanadium_sdk::ux::app_loading_stop();
     }
 }

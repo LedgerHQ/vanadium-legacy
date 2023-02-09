@@ -7,7 +7,7 @@
 #include "crypto.h"
 #include "ecall-vm.h"
 #include "ecall.h"
-#include "sdk/sdk.h"
+#include "sdk.h"
 
 static void readall(int fd, void *buf, size_t count)
 {
