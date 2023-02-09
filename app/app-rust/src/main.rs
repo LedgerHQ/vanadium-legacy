@@ -109,6 +109,30 @@ fn test_get_version() {
     assert_eq!(response, hex!("0a070a05312e322e33"));
 }
 
+
+#[cfg(target_arch = "riscv32")]
+#[panic_handler]
+fn my_panic(_info: &core::panic::PanicInfo) -> ! {
+    fatal("panic");
+    loop {}
+}
+
+#[cfg(target_arch = "riscv32")]
+#[no_mangle]
+pub fn atexit(_f: *const u8) {
+    /* required by libcrypto */
+    fatal("atexit");
+    panic!("atexit called");
+}
+
+#[cfg(target_arch = "riscv32")]
+#[no_mangle]
+pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
+    main();
+    0
+}
+
+
 #[no_mangle]
 pub extern "C" fn main() {
     version::setup_app();

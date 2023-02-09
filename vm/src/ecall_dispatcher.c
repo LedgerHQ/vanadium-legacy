@@ -4,7 +4,7 @@
 #include "ecall_hash.h"
 #include "rv_cpu.h"
 
-#include "sdk/api/ecall-nr.h"
+#include "api/ecall-nr.h"
 
 /*
  * Return false if the ecall either exit() or unsupported, false otherwise.

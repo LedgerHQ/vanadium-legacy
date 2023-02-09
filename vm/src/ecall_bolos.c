@@ -11,7 +11,7 @@
 #include "os_random.h"
 #include "os_seed.h"
 
-#include "sdk/api/ecall-nr.h"
+#include "api/ecall-nr.h"
 
 bool sys_derive_node_bip32(eret_t *eret, cx_curve_t curve, guest_pointer_t p_path, size_t path_count, guest_pointer_t p_private_key, guest_pointer_t p_chain)
 {

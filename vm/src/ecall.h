@@ -9,7 +9,7 @@
 #include "speculos.h"
 #endif
 
-#include "sdk/api/ecall-params.h"
+#include "api/ecall-params.h"
 
 struct rv_cpu;
 

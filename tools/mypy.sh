@@ -4,7 +4,6 @@
 
 set -e
 
-find host/ app/app-*/ -type f -name '*.py' \
-  ! -name '*_pb2.py' \
+find host/ -type f -name '*.py' \
   -exec flake8 --max-line-length=120 '{}' '+' \
   -exec mypy --ignore-missing-imports '{}' '+'

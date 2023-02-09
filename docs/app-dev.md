@@ -8,17 +8,12 @@ Build the docker image to have a ready-to-use RISC-V toolchain:
 docker build -t riscv .
 ```
 
-Retrieve jsmn and nanopb git submodule:
-```console
-git submodule update --init
-```
-
-Build the RISC-V app using the `docker.sh` script:
+Build the RISC-V C sdk using the `docker.sh` script:
 
 ```console
 $ ./docker.sh riscv
-[root:/app] # cmake -Bbuild -H.
-[root:/app] # make -C build/
+[root:/c-sdk] # cmake -Bbuild -H.
+[root:/c-sdk] # make -C build/
 ```
 
 ### Build the RISC-V VM and install it on the Nano device

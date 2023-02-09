@@ -30,8 +30,8 @@ jobs:
           ./tools/clang-format.sh
           ./tools/mypy.sh
 
-      - name: Build
-        working-directory: ./app
+      - name: Build C sdk
+        working-directory: ./c-sdk
         run: |
            cmake -Bbuild -H.
            make -j -C build/
@@ -42,8 +42,8 @@ jobs:
           name: lib-riscv
           if-no-files-found: error
           path: |
-            ./app/build/sdk/libsdk.a
-            ./app/build/sdk/ux/libux.a
+            ./c-sdk/build/libsdk.a
+            ./c-sdk/build/ux/libux.a
             /usr/local/riscv32-unknown-linux-gnu/lib/libc.a
 
   build-x64:
@@ -85,13 +85,13 @@ jobs:
         env:
           SPECULOS_DIR: /speculos/
           BOLOS_SDK_DIR: /bolos_sdk/
-        working-directory: ./app
+        working-directory: ./c-sdk
         run: |
            cmake -Bbuild/native -H. -DNATIVE=1
            make -j -C build/native/
 
       - name: Test
-        working-directory: ./app
+        working-directory: ./c-sdk
         run: |
            make -C build/native/ test
 
@@ -101,10 +101,10 @@ jobs:
           name: lib-x64
           if-no-files-found: error
           path: |
-            ./app/build/native/sdk/libcxng.a
-            ./app/build/native/sdk/libsdk.a
-            ./app/build/native/sdk/libspeculos.a
-            ./app/build/native/sdk/ux/libux.a
+            ./c-sdk/build/native/libcxng.a
+            ./c-sdk/build/native/libsdk.a
+            ./c-sdk/build/native/libspeculos.a
+            ./c-sdk/build/native/ux/libux.a
             /usr/local/lib/libcrypto.a
 
   build-rust:
@@ -142,6 +142,7 @@ jobs:
           name: lib-x64
           path: /tmp/artifacts-x64/
 
+      # TODO: update this part, things have moved
       - name: Move artifacts to the lib/ directory
         run: |
            mkdir -p ./app/app-rust/lib/risc-v/ ./app/app-rust/lib/x64/
