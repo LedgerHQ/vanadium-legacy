@@ -69,16 +69,27 @@ else
     DEFINES += IO_SEPROXYHAL_BUFFER_SIZE_B=128
 endif
 
-DEBUG = 0
-ifneq ($(DEBUG),0)
-    DEFINES += HAVE_PRINTF
-    ifeq ($(TARGET_NAME),TARGET_NANOX)
-        DEFINES += PRINTF=mcu_usb_printf
-    else
-        DEFINES += PRINTF=screen_printf
-    endif
+
+# debugging helper functions and macros
+CFLAGS    += -include debug-helpers/debug.h
+
+ifndef DEBUG
+        DEBUG = 0
+endif
+
+ifeq ($(DEBUG),0)
+        DEFINES   += PRINTF\(...\)=
 else
-        DEFINES += PRINTF\(...\)=
+        ifeq ($(DEBUG),10)
+                $(warning Using semihosted PRINTF. Only run with speculos!)
+                DEFINES   += HAVE_PRINTF HAVE_SEMIHOSTED_PRINTF PRINTF=semihosted_printf
+        else
+                ifeq ($(TARGET_NAME),TARGET_NANOS)
+                        DEFINES   += HAVE_PRINTF PRINTF=screen_printf
+                else
+                        DEFINES   += HAVE_PRINTF PRINTF=mcu_usb_printf
+                endif
+        endif
 endif
 
 ifneq ($(BOLOS_ENV),)
