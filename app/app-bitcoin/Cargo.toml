@@ -1,0 +1,23 @@
+[package]
+name = "app-bitcoin"
+version = "0.1.0"
+authors = ["Salvatore Ingala"]
+
+[[bin]]
+name = "app-bitcoin"
+path = "src/main.rs"
+
+[dependencies]
+bitcoin = { path = "./bitcoin" }
+quick-protobuf = { version = "0.8.1", default-features = false }
+vanadium_sdk = { path = "../../rust-sdk" }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+strip = true
+opt-level = "z"
+#codegen-units = 1
+lto = true
