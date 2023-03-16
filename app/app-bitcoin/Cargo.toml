@@ -8,9 +8,12 @@ name = "app-bitcoin"
 path = "src/main.rs"
 
 [dependencies]
-bitcoin = { path = "./bitcoin" }
+bitcoin = { path = "rust-bitcoin/bitcoin", default-features = false, features = ["no-std"] }
 quick-protobuf = { version = "0.8.1", default-features = false }
 vanadium_sdk = { path = "../../rust-sdk" }
+
+[patch.crates-io.bitcoin_hashes]
+path = "./rust-bitcoin/hashes"
 
 [profile.dev]
 panic = "abort"
