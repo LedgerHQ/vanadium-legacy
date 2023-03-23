@@ -27,19 +27,16 @@ use message::message::*;
 
 use vanadium_sdk::fatal;
 
-#[cfg(test)]
-use hex_literal::hex;
-
 fn handle_get_version<'a>() -> ResponseGetVersion<'a> {
     ResponseGetVersion {
         version: Cow::Borrowed("0.0.1"),
     }
 }
 
-
 fn handle_get_master_fingerprint() -> ResponseGetMasterFingerprint {
+    let fpr = vanadium_sdk::crypto::get_master_fingerprint().unwrap();
     ResponseGetMasterFingerprint {
-        fingerprint: 0xf5acc2fd,
+        fingerprint: fpr,
     }
 }
 
