@@ -54,4 +54,5 @@ extern "C" {
         size: usize,
     ) -> bool;
     pub fn ecall_hash_final(hash_id: CxHashId, ctx: CtxHashGuest, buffer: *mut u8) -> bool;
+    pub fn ecall_get_master_fingerprint(out: *mut [u8; 4]) -> bool;
 }

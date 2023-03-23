@@ -18,6 +18,8 @@ use self::ecall::*;
 #[global_allocator]
 static ALLOCATOR: allocator::CAlloc = allocator::CAlloc;
 
+
+#[derive(Debug)]
 pub enum SdkError {
     KeyGeneration,
     PathDerivation,

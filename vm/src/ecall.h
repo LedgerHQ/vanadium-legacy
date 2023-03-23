@@ -63,4 +63,6 @@ bool sys_get_random_bytes(guest_pointer_t p_buffer, size_t size);
 bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len);
 bool sys_tostring256(eret_t *eret, const guest_pointer_t p_number, const unsigned int base, guest_pointer_t p_out, size_t len);
 
+bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_fpr);
+
 bool ecall(struct rv_cpu *cpu);

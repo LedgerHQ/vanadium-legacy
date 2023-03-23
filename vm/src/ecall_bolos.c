@@ -273,3 +273,63 @@ bool sys_tostring256(eret_t *eret, const guest_pointer_t p_number, const unsigne
 
     return true;
 }
+
+bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
+{
+    uint8_t raw_private_key[32] = {0};
+    uint8_t chain_code[32] = {0};
+
+    cx_ecfp_private_key_t private_key = {0};
+    cx_ecfp_public_key_t public_key;
+
+    int ret = 0;
+    BEGIN_TRY {
+        TRY {
+            // derive the seed with bip32_path
+            os_perso_derive_node_bip32(CX_CURVE_256K1,
+                                       (const uint32_t[]){},
+                                       0,
+                                       raw_private_key,
+                                       chain_code);
+
+            // new private_key from raw
+            cx_ecfp_init_private_key(CX_CURVE_256K1,
+                                     raw_private_key,
+                                     sizeof(raw_private_key),
+                                     &private_key);
+            // generate corresponding public key
+            cx_ecfp_generate_pair(CX_CURVE_256K1, &public_key, &private_key, 1);
+        }
+        CATCH_ALL {
+            ret = -1;
+        }
+        FINALLY {
+            explicit_bzero(raw_private_key, sizeof(raw_private_key));
+            explicit_bzero(chain_code, sizeof(chain_code));
+            explicit_bzero(&private_key, sizeof(private_key));
+        }
+    }
+    END_TRY;
+
+    if (ret < 0) {
+        eret->success = false;
+        return true;
+    }
+
+    uint8_t compressed_pubkey[33];
+    compressed_pubkey[0] = (public_key.W[64] % 2 == 1) ? 0x03 : 0x02;
+    memmove(compressed_pubkey + 1, public_key.W + 1, 32);
+
+    uint8_t hash[32];
+    cx_hash_sha256(compressed_pubkey, sizeof(compressed_pubkey), hash, 32);
+    cx_hash_ripemd160(hash, 32, hash, 20);
+
+    // the first 4 bytes are the fingerprint
+    if (!copy_host_buffer(p_out, hash, 4)) {
+        eret->success = false;
+        return false;
+    }
+
+    eret->success = true;
+    return true;
+}

@@ -124,3 +124,14 @@ bool ecall_tostring256(const uint256_t *number, const unsigned int base, char *o
 
     return eret.success;
 }
+
+bool ecall_get_master_fingerprint(const uint256_t *number, uint32_t *out)
+{
+    eret_t eret;
+
+    if (!sys_get_master_fingerprint(&eret, NP(out))) {
+        errx(1, "sys_get_master_fingerprint failed");
+    }
+
+    return eret.success;
+}

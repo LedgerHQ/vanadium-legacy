@@ -2,7 +2,7 @@
 use hex_literal::hex;
 
 use crate::{
-    ecall_hash_update, fatal, ecall::{ecall_hash_final, ecall_derive_node_bip32, ecall_cx_ecfp_generate_pair, ecall_get_random_bytes, ecall_ecdsa_verify}, SdkError
+    ecall_hash_update, fatal, ecall::{ecall_hash_final, ecall_derive_node_bip32, ecall_cx_ecfp_generate_pair, ecall_get_random_bytes, ecall_ecdsa_verify, ecall_get_master_fingerprint}, SdkError
 };
 
 #[repr(C)]
@@ -223,6 +223,15 @@ pub fn ecfp_generate_keypair(
 pub fn get_random_bytes(buffer: &mut [u8]) {
     unsafe {
         ecall_get_random_bytes(buffer.as_mut_ptr(), buffer.len());
+    }
+}
+
+pub fn get_master_fingerprint() -> Result<u32, SdkError> {
+    let mut out: [u8; 4] = [0; 4];
+    if !unsafe { ecall_get_master_fingerprint(&mut out) } {
+        Err(SdkError::KeyGeneration)
+    } else {
+        Ok(u32::from_be_bytes(out))
     }
 }
 

@@ -94,6 +94,9 @@ bool ecall(struct rv_cpu *cpu)
     case ECALL_TOSTRING256:
         success = sys_tostring256(ERET(RV_REG_A0), GP(RV_REG_A0), cpu->regs[RV_REG_A1], GP(RV_REG_A2), cpu->regs[RV_REG_A3]);
         break;
+    case ECALL_GET_MASTER_FINGERPRINT:
+        success = sys_get_master_fingerprint(ERET(RV_REG_A0), GP(RV_REG_A0));
+        break;
     case ECALL_HASH_UPDATE:
         success = sys_hash_update(ERET(RV_REG_A0), cpu->regs[RV_REG_A0], GP(RV_REG_A1), GP(RV_REG_A2), cpu->regs[RV_REG_A3]);
         break;
