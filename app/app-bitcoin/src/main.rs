@@ -27,19 +27,17 @@ use message::message::*;
 
 use vanadium_sdk::fatal;
 
-fn handle_get_version<'a>() -> ResponseGetVersion<'a> {
-    ResponseGetVersion {
+fn handle_get_version<'a>() -> Result<ResponseGetVersion<'a>> {
+    Ok(ResponseGetVersion {
         version: Cow::Borrowed("0.0.1"),
-    }
+    })
 }
 
-fn handle_get_master_fingerprint() -> ResponseGetMasterFingerprint {
-    let fpr = vanadium_sdk::crypto::get_master_fingerprint().unwrap();
-    ResponseGetMasterFingerprint {
-        fingerprint: fpr,
-    }
+fn handle_get_master_fingerprint() -> Result<ResponseGetMasterFingerprint> {
+    Ok(ResponseGetMasterFingerprint {
+        fingerprint: vanadium_sdk::crypto::get_master_fingerprint()?,
+    })
 }
-
 
 fn set_error(msg: &'_ str) -> ResponseError {
     ResponseError {
@@ -62,8 +60,8 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
 
     let response = Response {
         response: match request.request {
-            OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()),
-            OneOfrequest::get_master_fingerprint(_) => OneOfresponse::get_master_fingerprint(handle_get_master_fingerprint()),
+            OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()?),
+            OneOfrequest::get_master_fingerprint(_) => OneOfresponse::get_master_fingerprint(handle_get_master_fingerprint()?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };
