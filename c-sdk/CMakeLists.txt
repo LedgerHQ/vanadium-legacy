@@ -129,35 +129,44 @@ else()
   target_include_directories (speculos PUBLIC ${SPECULOS_DIR}/src/ ${SPECULOS_DIR}/src/bolos/)
 
   add_library(cxng
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ades.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_blake2b.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_crc16.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_crc32.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecdh.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecdsa.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecfp.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecschnorr.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_eddsa.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_exported_functions.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_aead.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_cmac.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_Groestl-ref.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hash.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hkdf.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hmac.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_init.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_math.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_pbkdf2.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_pkcs1.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ram.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ripemd160.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_rng.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_aes.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_crc16.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hash.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_rng_rfc6979.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_aes_gcm.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_crc32.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hkdf.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_rsa.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_aes_siv.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_des.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hmac.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_selftests.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_blake2b.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecdh.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_math.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_sha256.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_blake3.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecdsa.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_pbkdf2.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_sha3.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_blake3_ref.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecfp.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_pkcs1.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_sha512.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_chacha.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ecschnorr.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_poly1305.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_utils.c
-    )
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_chacha_poly.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_eddsa.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ram.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_cipher.c
+    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_ripemd160.c  
+  )
 
   target_include_directories (cxng PUBLIC ${BOLOS_SDK_DIR}/include ${BOLOS_SDK_DIR}/lib_cxng/include)
 
