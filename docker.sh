@@ -46,8 +46,8 @@ case ${image} in
         docker_run native \
                    --env SPECULOS_DIR=/speculos/ \
                    --env BOLOS_SDK_DIR=/bolos_sdk/ \
-                   -v "${HOME}/code/speculos/":/speculos/:ro \
-                   -v "${HOME}/code/ledger/sdk/sdk-balenos-2.0.0/":/bolos_sdk/:ro
+                   -v "${SPECULOS_DIR}":/speculos/:ro \
+                   -v "${LEDGER_SDK_DIR}":/bolos_sdk/:ro
         ;;
 
     rust)
