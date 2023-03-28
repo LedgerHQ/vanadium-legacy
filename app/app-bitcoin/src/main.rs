@@ -6,6 +6,7 @@ extern crate byteorder;
 extern crate quick_protobuf;
 extern crate vanadium_sdk;
 
+extern crate hex_literal;
 
 #[cfg(not(target_arch = "riscv32"))]
 extern crate core;
@@ -188,7 +189,7 @@ pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
 }
 
 
-#[no_mangle]
+#[start]
 pub extern "C" fn main() {
     version::setup_app();
 

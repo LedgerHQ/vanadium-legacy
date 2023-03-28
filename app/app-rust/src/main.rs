@@ -133,7 +133,7 @@ pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
 }
 
 
-#[no_mangle]
+#[start]
 pub extern "C" fn main() {
     version::setup_app();
 
