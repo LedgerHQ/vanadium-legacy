@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\"\x13\n\x11RequestGetVersion\"%\n\x12ResponseGetVersion\x12\x0f\n\x07version\x18\x01 \x01(\t\"\x1d\n\x1bRequestGetMasterFingerprint\"3\n\x1cResponseGetMasterFingerprint\x12\x13\n\x0b\x66ingerprint\x18\x01 \x01(\r\"\"\n\rResponseError\x12\x11\n\terror_msg\x18\x01 \x01(\t\"\x7f\n\x07Request\x12)\n\x0bget_version\x18\x01 \x01(\x0b\x32\x12.RequestGetVersionH\x00\x12>\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1c.RequestGetMasterFingerprintH\x00\x42\t\n\x07request\"\xa4\x01\n\x08Response\x12*\n\x0bget_version\x18\x01 \x01(\x0b\x32\x13.ResponseGetVersionH\x00\x12?\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1d.ResponseGetMasterFingerprintH\x00\x12\x1f\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x0e.ResponseErrorH\x00\x42\n\n\x08responseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\"\x13\n\x11RequestGetVersion\"%\n\x12ResponseGetVersion\x12\x0f\n\x07version\x18\x01 \x01(\t\"\x1d\n\x1bRequestGetMasterFingerprint\"3\n\x1cResponseGetMasterFingerprint\x12\x13\n\x0b\x66ingerprint\x18\x01 \x01(\r\"?\n\x18RequestGetExtendedPubkey\x12\x0f\n\x07\x64isplay\x18\x01 \x01(\x08\x12\x12\n\nbip32_path\x18\x02 \x03(\r\"+\n\x19ResponseGetExtendedPubkey\x12\x0e\n\x06pubkey\x18\x01 \x01(\t\"\"\n\rResponseError\x12\x11\n\terror_msg\x18\x01 \x01(\t\"\xb9\x01\n\x07Request\x12)\n\x0bget_version\x18\x01 \x01(\x0b\x32\x12.RequestGetVersionH\x00\x12>\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1c.RequestGetMasterFingerprintH\x00\x12\x38\n\x13get_extended_pubkey\x18\x03 \x01(\x0b\x32\x19.RequestGetExtendedPubkeyH\x00\x42\t\n\x07request\"\xdf\x01\n\x08Response\x12*\n\x0bget_version\x18\x01 \x01(\x0b\x32\x13.ResponseGetVersionH\x00\x12?\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1d.ResponseGetMasterFingerprintH\x00\x12\x39\n\x13get_extended_pubkey\x18\x03 \x01(\x0b\x32\x1a.ResponseGetExtendedPubkeyH\x00\x12\x1f\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x0e.ResponseErrorH\x00\x42\n\n\x08responseb\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'message_pb2', globals())
@@ -28,10 +28,14 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _REQUESTGETMASTERFINGERPRINT._serialized_end=106
   _RESPONSEGETMASTERFINGERPRINT._serialized_start=108
   _RESPONSEGETMASTERFINGERPRINT._serialized_end=159
-  _RESPONSEERROR._serialized_start=161
-  _RESPONSEERROR._serialized_end=195
-  _REQUEST._serialized_start=197
-  _REQUEST._serialized_end=324
-  _RESPONSE._serialized_start=327
-  _RESPONSE._serialized_end=491
+  _REQUESTGETEXTENDEDPUBKEY._serialized_start=161
+  _REQUESTGETEXTENDEDPUBKEY._serialized_end=224
+  _RESPONSEGETEXTENDEDPUBKEY._serialized_start=226
+  _RESPONSEGETEXTENDEDPUBKEY._serialized_end=269
+  _RESPONSEERROR._serialized_start=271
+  _RESPONSEERROR._serialized_end=305
+  _REQUEST._serialized_start=308
+  _REQUEST._serialized_end=493
+  _RESPONSE._serialized_start=496
+  _RESPONSE._serialized_end=719
 # @@protoc_insertion_point(module_scope)

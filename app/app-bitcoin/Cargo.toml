@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 bitcoin = { path = "rust-bitcoin/bitcoin", default-features = false, features = ["no-std"] }
+byteorder = { version = "1.4.3", default-features = false }
 quick-protobuf = { version = "0.8.1", default-features = false }
 vanadium_sdk = { path = "../../rust-sdk" }
 

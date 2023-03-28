@@ -107,6 +107,74 @@ impl MessageWrite for ResponseGetMasterFingerprint {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct RequestGetExtendedPubkey {
+    pub display: bool,
+    pub bip32_path: Vec<u32>,
+}
+
+impl<'a> MessageRead<'a> for RequestGetExtendedPubkey {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.display = r.read_bool(bytes)?,
+                Ok(18) => msg.bip32_path = r.read_packed(bytes, |r, bytes| Ok(r.read_uint32(bytes)?))?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for RequestGetExtendedPubkey {
+    fn get_size(&self) -> usize {
+        0
+        + if self.display == false { 0 } else { 1 + sizeof_varint(*(&self.display) as u64) }
+        + if self.bip32_path.is_empty() { 0 } else { 1 + sizeof_len(self.bip32_path.iter().map(|s| sizeof_varint(*(s) as u64)).sum::<usize>()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.display != false { w.write_with_tag(8, |w| w.write_bool(*&self.display))?; }
+        w.write_packed_with_tag(18, &self.bip32_path, |w, m| w.write_uint32(*m), &|m| sizeof_varint(*(m) as u64))?;
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct ResponseGetExtendedPubkey<'a> {
+    pub pubkey: Cow<'a, str>,
+}
+
+impl<'a> MessageRead<'a> for ResponseGetExtendedPubkey<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.pubkey = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for ResponseGetExtendedPubkey<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.pubkey == "" { 0 } else { 1 + sizeof_len((&self.pubkey).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.pubkey != "" { w.write_with_tag(10, |w| w.write_string(&**&self.pubkey))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct ResponseError<'a> {
     pub error_msg: Cow<'a, str>,
 }
@@ -150,6 +218,7 @@ impl<'a> MessageRead<'a> for Request {
             match r.next_tag(bytes) {
                 Ok(10) => msg.request = mod_Request::OneOfrequest::get_version(r.read_message::<RequestGetVersion>(bytes)?),
                 Ok(18) => msg.request = mod_Request::OneOfrequest::get_master_fingerprint(r.read_message::<RequestGetMasterFingerprint>(bytes)?),
+                Ok(26) => msg.request = mod_Request::OneOfrequest::get_extended_pubkey(r.read_message::<RequestGetExtendedPubkey>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -164,12 +233,14 @@ impl MessageWrite for Request {
         + match self.request {
             mod_Request::OneOfrequest::get_version(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::get_master_fingerprint(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Request::OneOfrequest::get_extended_pubkey(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::None => 0,
     }    }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         match self.request {            mod_Request::OneOfrequest::get_version(ref m) => { w.write_with_tag(10, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::get_master_fingerprint(ref m) => { w.write_with_tag(18, |w| w.write_message(m))? },
+            mod_Request::OneOfrequest::get_extended_pubkey(ref m) => { w.write_with_tag(26, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::None => {},
     }        Ok(())
     }
@@ -184,6 +255,7 @@ use super::*;
 pub enum OneOfrequest {
     get_version(RequestGetVersion),
     get_master_fingerprint(RequestGetMasterFingerprint),
+    get_extended_pubkey(RequestGetExtendedPubkey),
     None,
 }
 
@@ -208,7 +280,8 @@ impl<'a> MessageRead<'a> for Response<'a> {
             match r.next_tag(bytes) {
                 Ok(10) => msg.response = mod_Response::OneOfresponse::get_version(r.read_message::<ResponseGetVersion>(bytes)?),
                 Ok(18) => msg.response = mod_Response::OneOfresponse::get_master_fingerprint(r.read_message::<ResponseGetMasterFingerprint>(bytes)?),
-                Ok(26) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
+                Ok(26) => msg.response = mod_Response::OneOfresponse::get_extended_pubkey(r.read_message::<ResponseGetExtendedPubkey>(bytes)?),
+                Ok(34) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -223,6 +296,7 @@ impl<'a> MessageWrite for Response<'a> {
         + match self.response {
             mod_Response::OneOfresponse::get_version(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::get_master_fingerprint(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Response::OneOfresponse::get_extended_pubkey(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::error(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::None => 0,
     }    }
@@ -230,7 +304,8 @@ impl<'a> MessageWrite for Response<'a> {
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         match self.response {            mod_Response::OneOfresponse::get_version(ref m) => { w.write_with_tag(10, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::get_master_fingerprint(ref m) => { w.write_with_tag(18, |w| w.write_message(m))? },
-            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(26, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::get_extended_pubkey(ref m) => { w.write_with_tag(26, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::None => {},
     }        Ok(())
     }
@@ -245,6 +320,7 @@ use super::*;
 pub enum OneOfresponse<'a> {
     get_version(ResponseGetVersion<'a>),
     get_master_fingerprint(ResponseGetMasterFingerprint),
+    get_extended_pubkey(ResponseGetExtendedPubkey<'a>),
     error(ResponseError<'a>),
     None,
 }

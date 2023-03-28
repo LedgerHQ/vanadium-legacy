@@ -14,6 +14,15 @@ message ResponseGetMasterFingerprint {
   uint32 fingerprint = 1;
 };
 
+message RequestGetExtendedPubkey {
+  bool display = 1;
+  repeated uint32 bip32_path = 2;
+};
+
+message ResponseGetExtendedPubkey {
+  string pubkey = 1;
+};
+
 message ResponseError {
   string error_msg = 1;
 };
@@ -22,6 +31,7 @@ message Request {
   oneof request {
     RequestGetVersion get_version = 1;
     RequestGetMasterFingerprint get_master_fingerprint = 2;
+    RequestGetExtendedPubkey get_extended_pubkey = 3;
   }
 }
 
@@ -29,6 +39,7 @@ message Response {
   oneof response {
     ResponseGetVersion get_version = 1;
     ResponseGetMasterFingerprint get_master_fingerprint = 2;
-    ResponseError error = 3;
+    ResponseGetExtendedPubkey get_extended_pubkey = 3;
+    ResponseError error = 4;
   }
 }
