@@ -163,6 +163,11 @@ cx_err_t cx_ecpoint_scalarmul(cx_ecpoint_t *P, const uint8_t *k, size_t k_len)
     return sys_cx_ecpoint_scalarmul(P, k, k_len);
 }
 
+cx_err_t cx_ecpoint_rnd_fixed_scalarmul(cx_ecpoint_t *ec_P, const uint8_t *k, size_t k_len)
+{
+    return sys_cx_ecpoint_rnd_fixed_scalarmul(ec_P, k, k_len);
+}
+
 void os_perso_derive_node_bip32(cx_curve_t curve,
                                 const unsigned int *path,
                                 unsigned int pathLength,

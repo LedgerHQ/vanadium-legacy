@@ -283,33 +283,27 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
     cx_ecfp_public_key_t public_key;
 
     int ret = 0;
-    BEGIN_TRY {
-        TRY {
-            // derive the seed with bip32_path
-            os_perso_derive_node_bip32(CX_CURVE_256K1,
-                                       (const uint32_t[]){},
-                                       0,
-                                       raw_private_key,
-                                       chain_code);
 
-            // new private_key from raw
-            cx_ecfp_init_private_key(CX_CURVE_256K1,
-                                     raw_private_key,
-                                     sizeof(raw_private_key),
-                                     &private_key);
-            // generate corresponding public key
-            cx_ecfp_generate_pair(CX_CURVE_256K1, &public_key, &private_key, 1);
-        }
-        CATCH_ALL {
-            ret = -1;
-        }
-        FINALLY {
-            explicit_bzero(raw_private_key, sizeof(raw_private_key));
-            explicit_bzero(chain_code, sizeof(chain_code));
-            explicit_bzero(&private_key, sizeof(private_key));
-        }
-    }
-    END_TRY;
+    // TODO: no exception handling (unsupported when compiling natively)
+
+    // derive the seed with bip32_path
+    os_perso_derive_node_bip32(CX_CURVE_256K1,
+                                (const uint32_t[]){},
+                                0,
+                                raw_private_key,
+                                chain_code);
+
+    // new private_key from raw
+    cx_ecfp_init_private_key(CX_CURVE_256K1,
+                                raw_private_key,
+                                sizeof(raw_private_key),
+                                &private_key);
+    // generate corresponding public key
+    cx_ecfp_generate_pair(CX_CURVE_256K1, &public_key, &private_key, 1);
+
+    explicit_bzero(raw_private_key, sizeof(raw_private_key));
+    explicit_bzero(chain_code, sizeof(chain_code));
+    explicit_bzero(&private_key, sizeof(private_key));
 
     if (ret < 0) {
         eret->success = false;
