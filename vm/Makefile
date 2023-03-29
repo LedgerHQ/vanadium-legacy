@@ -21,13 +21,8 @@ endif
 
 include $(BOLOS_SDK)/Makefile.defines
 
-APP_LOAD_PARAMS  = --curve secp256k1
-ifeq ($(TARGET_NAME), TARGET_NANOX)
-APP_LOAD_PARAMS=--appFlags 0x200  # APPLICATION_FLAG_BOLOS_SETTINGS
-else
-APP_LOAD_PARAMS=--appFlags 0x000
-endif
-APP_LOAD_PARAMS += --path "44'" --path "84'"
+# TODO: improve permissions
+APP_LOAD_PARAMS += --appFlags 0x210  # APPLICATION_FLAG_BOLOS_SETTINGS + DERIVE_MASTER
 APP_LOAD_PARAMS += $(COMMON_LOAD_PARAMS)
 
 APPNAME      = "RISC-V VM"
