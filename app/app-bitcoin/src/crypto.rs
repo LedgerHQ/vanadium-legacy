@@ -1,6 +1,6 @@
 extern crate bitcoin;
 
-use vanadium_sdk::crypto::{EcfpPublicKey, CtxSha256, CtxRipeMd160, CxCurve};
+use vanadium_sdk::crypto::{EcfpPublicKey, CtxSha256, CtxRipeMd160};
 
 use byteorder::{BigEndian, ByteOrder};
 
@@ -47,6 +47,8 @@ pub fn get_key_fingerprint(key: &EcfpPublicKey) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use vanadium_sdk::crypto::{CxCurve};
 
     #[test]
     fn test_get_checksum() {
