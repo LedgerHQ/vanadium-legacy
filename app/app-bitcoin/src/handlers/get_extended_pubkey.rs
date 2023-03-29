@@ -76,3 +76,27 @@ pub fn handle_get_extended_pubkey<'a>(req: RequestGetExtendedPubkey) -> Result<R
         pubkey: Cow::Owned(bitcoin::base58::encode(&serialized_pubkey)),
     })
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const H: u32 = 0x80000000u32;
+
+    #[test]
+    fn test_get_extended_pubkey() {
+        let req = RequestGetExtendedPubkey {
+            display: false,
+            bip32_path: vec![44+H, 1+H, 0+H]
+        };
+
+        let resp = handle_get_extended_pubkey(req);
+
+
+        assert_eq!(
+            resp.unwrap().pubkey,
+            "tpubDCwYjpDhUdPGP5rS3wgNg13mTrrjBuG8V9VpWbyptX6TRPbNoZVXsoVUSkCjmQ8jJycjuDKBb9eataSymXakTTaGifxR6kmVsfFehH1ZgJT"
+        );
+    }
+}

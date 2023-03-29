@@ -4,9 +4,6 @@ use vanadium_sdk::crypto::{EcfpPublicKey, CtxSha256, CtxRipeMd160};
 
 use byteorder::{BigEndian, ByteOrder};
 
-#[cfg(test)]
-use hex_literal::hex;
-
 
 pub fn get_checksum(data: &[u8]) -> u32 {
     let sha256 = CtxSha256::new().update(&data).r#final();
@@ -49,6 +46,7 @@ mod tests {
     use super::*;
 
     use vanadium_sdk::crypto::{CxCurve};
+    use hex_literal::hex;
 
     #[test]
     fn test_get_checksum() {
