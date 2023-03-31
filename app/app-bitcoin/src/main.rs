@@ -5,6 +5,7 @@
 extern crate alloc;
 extern crate bitcoin;
 extern crate byteorder;
+extern crate nom;
 extern crate quick_protobuf;
 extern crate vanadium_sdk;
 
@@ -19,6 +20,7 @@ mod ui;
 mod version;
 mod crypto;
 mod handlers;
+mod wallet;
 
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
