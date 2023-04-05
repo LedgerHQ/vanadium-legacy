@@ -22,21 +22,21 @@ const BASE58_ALPHABET: &str = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopq
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct KeyOrigin {
-    fingerprint: u32,
-    derivation_path: Vec<u32>,
+    pub fingerprint: u32,
+    pub derivation_path: Vec<u32>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct KeyInformation {
-    pubkey: String,
-    origin_info: Option<KeyOrigin>,
+    pub pubkey: String,
+    pub origin_info: Option<KeyOrigin>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct KeyPlaceholder {
-    key_index: u32,
-    num1: u32,
-    num2: u32
+    pub key_index: u32,
+    pub num1: u32,
+    pub num2: u32
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -97,7 +97,7 @@ impl KeyInformation {
 }
 
 
-pub trait ToDescriptor {
+trait ToDescriptor {
     fn to_descriptor(
         &self,
         key_information: &[KeyInformation],
@@ -740,6 +740,7 @@ impl ToDescriptor for DescriptorTemplate {
         }
     }
 }
+
 
 // TODO: add tests fro to_descriptor
 
