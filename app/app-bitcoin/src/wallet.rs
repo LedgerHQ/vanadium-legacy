@@ -1,6 +1,7 @@
-use alloc::{boxed::Box, string::String, vec::Vec, format};
-use bitcoin::hashes::hex::FromHex;
+use alloc::{boxed::Box, string::{String, ToString}, vec::Vec, format};
 use core::str::FromStr;
+
+use hex::{self, FromHex};
 
 use nom::{
     bytes::complete::{tag, take_while_m_n, take},
@@ -18,6 +19,26 @@ const MAX_OLDER_AFTER: u32 = 2147483647; // maximum allowed in older/after
 
 const BASE58_ALPHABET: &str = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct KeyOrigin {
+    fingerprint: u32,
+    derivation_path: Vec<u32>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct KeyInformation {
+    pubkey: String,
+    origin_info: Option<KeyOrigin>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct KeyPlaceholder {
+    key_index: u32,
+    num1: u32,
+    num2: u32
+}
+
 #[derive(Debug, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum DescriptorTemplate {
@@ -26,7 +47,7 @@ pub enum DescriptorTemplate {
     Pkh(KeyPlaceholder),
     Wpkh(KeyPlaceholder),
     Sortedmulti(u32, Vec<KeyPlaceholder>),
-    Sortedmulti_A(u32, Vec<KeyPlaceholder>),
+    Sortedmulti_a(u32, Vec<KeyPlaceholder>),
     Tr(KeyPlaceholder, Option<TapTree>),
 
     Zero,
@@ -48,7 +69,7 @@ pub enum DescriptorTemplate {
     Or_i(Box<DescriptorTemplate>, Box<DescriptorTemplate>),
     Thresh(u32, Vec<DescriptorTemplate>),
     Multi(u32, Vec<KeyPlaceholder>),
-    Multi_A(u32, Vec<KeyPlaceholder>),
+    Multi_a(u32, Vec<KeyPlaceholder>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -57,6 +78,33 @@ pub enum TapTree {
     Branch(Box<TapTree>, Box<TapTree>),
 }
 
+impl KeyInformation {
+    pub fn to_string(&self) -> String {
+        match &self.origin_info {
+            Some(origin_info) => {
+                let path = origin_info
+                    .derivation_path
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<String>>()
+                    .join("/");
+
+                format!("[{}]{}/{}", origin_info.fingerprint, path, self.pubkey)
+            }
+            None => self.pubkey.clone(),
+        }
+    }
+}
+
+
+pub trait ToDescriptor {
+    fn to_descriptor(
+        &self,
+        key_information: &[KeyInformation],
+        is_change: bool,
+        address_index: u32,
+    ) -> Result<String, &'static str>;
+}
 
 // Creates a parser that recognizes a number between 0 and `n` (both included).
 // The returned parser will only accept the number if it doesn't have leading zeros,
@@ -77,26 +125,6 @@ fn parse_descriptor_template(input: &str) -> Result<DescriptorTemplate, &'static
         Ok((_, descriptor)) => Ok(descriptor),
         Err(_) => Err("Failed to parse descriptor template"),
     }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct KeyOrigin {
-    fingerprint: u32,
-    derivation_path: Vec<u32>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct KeyInformation {
-    pubkey: String,
-    origin_info: Option<KeyOrigin>,
-}
-
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct KeyPlaceholder {
-    key_index: u32,
-    num1: u32,
-    num2: u32
 }
 
 
@@ -383,11 +411,11 @@ fn parse_sortedmulti(input: &str) -> IResult<&str, DescriptorTemplate> {
 }
 
 fn parse_multi_a(input: &str) -> IResult<&str, DescriptorTemplate> {
-    parse_fragment_with_threshold_and_placeholders("multi_a", DescriptorTemplate::Multi_A)(input)
+    parse_fragment_with_threshold_and_placeholders("multi_a", DescriptorTemplate::Multi_a)(input)
 }
 
 fn parse_sortedmulti_a(input: &str) -> IResult<&str, DescriptorTemplate> {
-    parse_fragment_with_threshold_and_placeholders("sortedmulti_a", DescriptorTemplate::Sortedmulti_A)(input)
+    parse_fragment_with_threshold_and_placeholders("sortedmulti_a", DescriptorTemplate::Sortedmulti_a)(input)
 }
 
 
@@ -573,7 +601,147 @@ impl WalletPolicy {
 }
 
 
+impl ToDescriptor for TapTree {
+    fn to_descriptor(
+        &self,
+        key_information: &[KeyInformation],
+        is_change: bool,
+        address_index: u32,
+    ) -> Result<String, &'static str> {
+        match self {
+            TapTree::Script(descriptor_template) => {
+                descriptor_template.to_descriptor(key_information, is_change, address_index)
+            }
+            TapTree::Branch(left, right) => {
+                let left_descriptor = left.to_descriptor(key_information, is_change, address_index)?;
+                let right_descriptor = right.to_descriptor(key_information, is_change, address_index)?;
 
+                Ok(format!("{{{},{}}}", left_descriptor, right_descriptor))
+            }
+        }
+    }
+}
+
+impl ToDescriptor for DescriptorTemplate {
+    fn to_descriptor(
+        &self,
+        key_information: &[KeyInformation],
+        is_change: bool,
+        address_index: u32,
+    ) -> Result<String, &'static str> {
+        // converts a single placeholder to its string expression in a descriptor
+        let fmt_kp = |key_placeholder: &KeyPlaceholder, is_change: bool, address_index: u32| -> Result<String, _> {
+            let key_info = key_information
+                .get(key_placeholder.key_index as usize)
+                .ok_or("Invalid key index")
+                .map(|key_info| key_info.to_string());
+
+            let key_info = key_info?;
+
+            let change_step = if is_change { key_placeholder.num1 } else { key_placeholder.num2 };
+            Ok(format!("{}/{}/{}", key_info, change_step, address_index))
+        };
+
+        // converts a slice of placeholder to its string expression in a descriptor
+        let fmt_kps = |key_placeholders: &[KeyPlaceholder], is_change: bool, address_index: u32| -> Result<String, _> {
+            Ok(key_placeholders
+                .iter()
+                .map(|key_placeholder| fmt_kp(key_placeholder, is_change, address_index))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(","))
+        };
+
+        match self {
+            DescriptorTemplate::Sh(inner) => {
+                let inner_desc = inner.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("sh({})", inner_desc))
+            },
+            DescriptorTemplate::Wsh(inner) => {
+                let inner_desc = inner.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("wsh({})", inner_desc))
+            },
+            DescriptorTemplate::Pkh(kp) => Ok(format!("pkh({})", fmt_kp(kp, is_change, address_index)?)),
+            DescriptorTemplate::Wpkh(kp) => Ok(format!("wpkh({})", fmt_kp(kp, is_change, address_index)?)),
+            DescriptorTemplate::Sortedmulti(threshold, kps) => {
+                Ok(format!("sortedmulti({}, {})", threshold, fmt_kps(kps, is_change, address_index)?))
+            },
+            DescriptorTemplate::Sortedmulti_a(threshold, kps) => {
+                Ok(format!("sortedmulti_a({}, {})", threshold, fmt_kps(kps, is_change, address_index)?))
+            },
+            DescriptorTemplate::Tr(kp, tap_tree) => {
+                match tap_tree {
+                    Some(tree) => {
+                        let tap_tree_str = tree.to_descriptor(key_information, is_change, address_index)?;
+                        Ok(format!("tr({}, {})", fmt_kp(kp, is_change, address_index)?, tap_tree_str))
+                    }
+                    None => Ok(format!("tr({})", fmt_kp(kp, is_change, address_index)?)),
+                }
+            },
+            DescriptorTemplate::Zero => Ok("0".to_string()),
+            DescriptorTemplate::One => Ok("1".to_string()),
+            DescriptorTemplate::Pk_k(kp) => Ok(format!("pk_k({})", fmt_kp(kp, is_change, address_index)?)),
+            DescriptorTemplate::Pk_h(kp) => Ok(format!("pk_h({})", fmt_kp(kp, is_change, address_index)?)),
+            DescriptorTemplate::Older(n) => Ok(format!("older({})", n)),
+            DescriptorTemplate::After(n) => Ok(format!("after({})", n)),
+            DescriptorTemplate::Sha256(hash) => Ok(format!("sha256({})", hex::encode(hash))),
+            DescriptorTemplate::Ripemd160(hash) => Ok(format!("ripemd160({})", hex::encode(hash))),
+            DescriptorTemplate::Hash256(hash) => Ok(format!("hash256({})", hex::encode(hash))),
+            DescriptorTemplate::Hash160(hash) => Ok(format!("hash160({})", hex::encode(hash))),
+            DescriptorTemplate::Andor(x, y, z) => {
+                let x_descriptor = x.to_descriptor(key_information, is_change, address_index)?;
+                let y_descriptor = y.to_descriptor(key_information, is_change, address_index)?;
+                let z_descriptor = z.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("andor({},{},{})", x_descriptor, y_descriptor, z_descriptor))
+            },
+            DescriptorTemplate::And_v(x, y) => {
+                let x_descriptor = x.to_descriptor(key_information, is_change, address_index)?;
+                let y_descriptor = y.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("and_v({},{})", x_descriptor, y_descriptor))
+            },
+            DescriptorTemplate::And_b(x, y) => {
+                let x_descriptor = x.to_descriptor(key_information, is_change, address_index)?;
+                let y_descriptor = y.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("and_b({},{})", x_descriptor, y_descriptor))
+            },
+            DescriptorTemplate::Or_b(x, z) => {
+                let x_descriptor = x.to_descriptor(key_information, is_change, address_index)?;
+                let z_descriptor = z.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("or_b({},{})", x_descriptor, z_descriptor))
+            },
+            DescriptorTemplate::Or_c(x, z) => {
+                let x_descriptor = x.to_descriptor(key_information, is_change, address_index)?;
+                let z_descriptor = z.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("or_c({},{})", x_descriptor, z_descriptor))
+            },
+            DescriptorTemplate::Or_d(x, z) => {
+                let x_descriptor = x.to_descriptor(key_information, is_change, address_index)?;
+                let z_descriptor = z.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("or_d({},{})", x_descriptor, z_descriptor))
+            },
+            DescriptorTemplate::Or_i(x, z) => {
+                let x_descriptor = x.to_descriptor(key_information, is_change, address_index)?;
+                let z_descriptor = z.to_descriptor(key_information, is_change, address_index)?;
+                Ok(format!("or_i({},{})", x_descriptor, z_descriptor))
+            },
+            DescriptorTemplate::Thresh(k, sub_templates) => {
+                let sub_descriptors: Result<Vec<String>, _> = sub_templates
+                    .iter()
+                    .map(|template| template.to_descriptor(key_information, is_change, address_index))
+                    .collect();
+                let sub_descriptors = sub_descriptors?;
+                Ok(format!("thresh({},[{}])", k, sub_descriptors.join(",")))
+            },
+            DescriptorTemplate::Multi(threshold, kps) => {
+                Ok(format!("multi({}, {})", threshold, fmt_kps(kps, is_change, address_index)?))
+            },
+            DescriptorTemplate::Multi_a(threshold, kps) => {
+                Ok(format!("multi_a({}, {})", threshold, fmt_kps(kps, is_change, address_index)?))
+            },
+        }
+    }
+}
+
+// TODO: add tests fro to_descriptor
 
 #[cfg(test)]
 mod tests {

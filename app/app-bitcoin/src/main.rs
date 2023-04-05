@@ -9,6 +9,7 @@ extern crate nom;
 extern crate quick_protobuf;
 extern crate vanadium_sdk;
 
+extern crate hex;
 extern crate hex_literal;
 
 #[cfg(not(target_arch = "riscv32"))]
