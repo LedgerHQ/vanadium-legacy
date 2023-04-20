@@ -1,4 +1,5 @@
-use alloc::{boxed::Box, string::{String, ToString}, vec::Vec, format};
+use alloc::{boxed::Box, string::{String, ToString}, vec, vec::Vec, format};
+
 use core::str::FromStr;
 
 use hex::{self, FromHex};
@@ -12,6 +13,12 @@ use nom::{
     multi::{many0, many_m_n, separated_list1},
     sequence::{delimited, pair, preceded, tuple, terminated}, branch::alt,
 };
+
+use bitcoin::consensus::encode::{self, VarInt};
+
+use vanadium_sdk::crypto::CtxSha256;
+
+use super::merkle::MerkleTree;
 
 const HARDENED_INDEX: u32 = 0x80000000u32;
 
@@ -604,6 +611,51 @@ impl WalletPolicy {
             key_information_raw,
         })
     }
+
+    pub fn descriptor_template_raw(&self) -> &str {
+        &self.descriptor_template_raw
+    }
+
+    pub fn key_information_raw(&self) -> impl Iterator<Item = &String> {
+        self.key_information_raw.iter()
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut res: Vec<u8> = vec![2];
+        res.extend_from_slice(&(self.name.len() as u8).to_be_bytes());
+        res.extend_from_slice(self.name.as_bytes());
+        res.extend(encode::serialize(&VarInt(
+            self.descriptor_template_raw.as_bytes().len() as u64,
+        )));
+
+
+        let desc_tmp_hash = CtxSha256::new().update(&self.descriptor_template_raw.as_bytes()).r#final();
+
+        res.extend_from_slice(&desc_tmp_hash);
+
+        res.extend(encode::serialize(&VarInt(self.key_information_raw.len() as u64)));
+
+        res.extend_from_slice(
+            MerkleTree::new(
+                self.key_information_raw
+                    .iter()
+                    .map(|key| {
+                        CtxSha256::new()
+                            .update(&vec![0x00])
+                            .update(key.to_string().as_bytes())
+                            .r#final()
+                    })
+                    .collect(),
+            )
+            .root_hash(),
+        );
+
+        res
+    }
+
+    pub fn id(&self) -> [u8; 32] {
+        CtxSha256::new().update(&self.serialize()).r#final()
+    }
 }
 
 
@@ -753,6 +805,8 @@ impl ToDescriptor for DescriptorTemplate {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use hex::ToHex;
 
     const H: u32 = HARDENED_INDEX;
     const MAX_STEP: &'static str = "2147483647";
@@ -937,5 +991,49 @@ mod tests {
         assert!(parse_tr("tr(@0))").is_err());
         assert!(parse_tr("tr(@0/*))").is_err());
         assert!(parse_tr("tr(@0/*/0)").is_err());
+    }
+
+
+    #[test]
+    fn test_parse_valid_descriptor_templates() {
+        let test_cases = vec![
+            "wsh(sortedmulti(2,@0/**,@1/**))",
+            "sh(wsh(sortedmulti(2,@0/**,@1/**)))",
+        ];
+
+        for input in test_cases {
+            let result = parse_descriptor_template(input);
+            assert!(result.is_ok())
+        }
+    }
+
+
+    #[test]
+    fn test_wallet_policy() {
+        let wallet = WalletPolicy::new(
+            "Cold storage".to_string(),
+            &"sh(wsh(sortedmulti(2,@0/**,@1/**)))".to_string(),
+            vec![
+                "[76223a6e/48'/1'/0'/1']tpubDE7NQymr4AFtcJXi9TaWZtrhAdy8QyKmT4U6b9qYByAxCzoyMJ8zw5d8xVLVpbTRAEqP8pVUxjLE2vDt1rSFjaiS8DSz1QcNZ8D1qxUMx1g",
+                "[f5acc2fd/48'/1'/0'/1']tpubDFAqEGNyad35YgH8zxvxFZqNUoPtr5mDojs7wzbXQBHTZ4xHeVXG6w2HvsKvjBpaRpTmjYDjdPg5w2c6Wvu8QBkyMDrmBWdCyqkDM7reSsY",
+            ]
+        );
+
+        assert!(wallet.is_ok());
+    }
+
+
+    #[test]
+    fn test_wallet_serialize_v2() {
+        let wallet = WalletPolicy::new(
+            "Cold storage".to_string(),
+            &"wsh(sortedmulti(2,@0/**,@1/**))".to_string(),
+            vec![
+               "[76223a6e/48'/1'/0'/2']tpubDE7NQymr4AFtewpAsWtnreyq9ghkzQBXpCZjWLFVRAvnbf7vya2eMTvT2fPapNqL8SuVvLQdbUbMfWLVDCZKnsEBqp6UK93QEzL8Ck23AwF",
+               "[f5acc2fd/48'/1'/0'/2']tpubDFAqEGNyad35aBCKUAXbQGDjdVhNueno5ZZVEn3sQbW5ci457gLR7HyTmHBg93oourBssgUxuWz1jX5uhc1qaqFo9VsybY1J5FuedLfm4dK",
+            ],
+        ).unwrap();
+
+        assert_eq!(wallet.serialize().encode_hex::<String>(), "020c436f6c642073746f726167651fb56c3d5542fa09b3956834a9ff6a1df5c36a38e5b02c63c54b41a9a04403b82602516d2c50a89476ecffeec658057f0110674bbfafc18797dc480c7ed53802f3fb");
     }
 }
