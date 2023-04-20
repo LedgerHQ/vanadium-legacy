@@ -122,7 +122,13 @@ fn parse_number_up_to(n: u32) -> impl Fn(&str) -> IResult<&str, u32> {
 
 fn parse_descriptor_template(input: &str) -> Result<DescriptorTemplate, &'static str> {
     match parse_descriptor(input) {
-        Ok((_, descriptor)) => Ok(descriptor),
+        Ok((rest, descriptor)) => { 
+            if rest.is_empty() {
+                Ok(descriptor)
+            } else {
+                Err("Failed to parse descriptor template: extra input remaining")
+            }
+        },
         Err(_) => Err("Failed to parse descriptor template"),
     }
 }
@@ -230,7 +236,7 @@ fn parse_key_placeholder(input: &str) -> IResult<&str, KeyPlaceholder> {
 
 
 fn parse_descriptor(input: &str) -> IResult<&str, DescriptorTemplate> {
-    let (input, descriptor) = all_consuming(nom::branch::alt((
+    let (input, descriptor) = nom::branch::alt((
         parse_sh,
         parse_wsh,
         parse_pkh,
@@ -260,7 +266,7 @@ fn parse_descriptor(input: &str) -> IResult<&str, DescriptorTemplate> {
             parse_or_i,
             parse_thresh,
         )),
-    )))(input)?;
+    ))(input)?;
     Ok((input, descriptor))
 }
 
@@ -850,6 +856,41 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn test_parse_sortedmulti() {
+        let input = "sortedmulti(2,@0/**,@1/**)";
+        let expected = Ok((
+            "",
+            DescriptorTemplate::Sortedmulti(
+                2,
+                vec![
+                    KeyPlaceholder { key_index: 0, num1: 0, num2: 1 },
+                    KeyPlaceholder { key_index: 1, num1: 0, num2: 1 },
+                ]
+            ),
+        ));
+        assert_eq!(parse_sortedmulti(input), expected);
+    }
+
+    #[test]
+    fn test_parse_wsh_sortedmulti() {
+        let input = "wsh(sortedmulti(2,@0/**,@1/**))";
+        let expected = Ok((
+            "",
+            DescriptorTemplate::Wsh(Box::new(
+                DescriptorTemplate::Sortedmulti(
+                    2,
+                    vec![
+                        KeyPlaceholder { key_index: 0, num1: 0, num2: 1 },
+                        KeyPlaceholder { key_index: 1, num1: 0, num2: 1 },
+                    ]
+                )
+            ))
+
+        ));
+        assert_eq!(parse_wsh(input), expected);
+    }
 
     #[test]
     fn test_parse_tr() {
