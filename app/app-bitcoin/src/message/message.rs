@@ -175,6 +175,82 @@ impl<'a> MessageWrite for ResponseGetExtendedPubkey<'a> {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct RequestRegisterWallet<'a> {
+    pub name: Cow<'a, str>,
+    pub descriptor_template: Cow<'a, str>,
+    pub keys_info: Vec<Cow<'a, str>>,
+}
+
+impl<'a> MessageRead<'a> for RequestRegisterWallet<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.name = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.descriptor_template = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.keys_info.push(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for RequestRegisterWallet<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.name == "" { 0 } else { 1 + sizeof_len((&self.name).len()) }
+        + if self.descriptor_template == "" { 0 } else { 1 + sizeof_len((&self.descriptor_template).len()) }
+        + self.keys_info.iter().map(|s| 1 + sizeof_len((s).len())).sum::<usize>()
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.name != "" { w.write_with_tag(10, |w| w.write_string(&**&self.name))?; }
+        if self.descriptor_template != "" { w.write_with_tag(18, |w| w.write_string(&**&self.descriptor_template))?; }
+        for s in &self.keys_info { w.write_with_tag(26, |w| w.write_string(&**s))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct ResponseRegisterWallet<'a> {
+    pub wallet_id: Cow<'a, [u8]>,
+    pub wallet_hmac: Cow<'a, [u8]>,
+}
+
+impl<'a> MessageRead<'a> for ResponseRegisterWallet<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.wallet_id = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.wallet_hmac = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for ResponseRegisterWallet<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.wallet_id == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.wallet_id).len()) }
+        + if self.wallet_hmac == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.wallet_hmac).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.wallet_id != Cow::Borrowed(b"") { w.write_with_tag(10, |w| w.write_bytes(&**&self.wallet_id))?; }
+        if self.wallet_hmac != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.wallet_hmac))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct ResponseError<'a> {
     pub error_msg: Cow<'a, str>,
 }
@@ -207,11 +283,11 @@ impl<'a> MessageWrite for ResponseError<'a> {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Request {
-    pub request: mod_Request::OneOfrequest,
+pub struct Request<'a> {
+    pub request: mod_Request::OneOfrequest<'a>,
 }
 
-impl<'a> MessageRead<'a> for Request {
+impl<'a> MessageRead<'a> for Request<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -219,6 +295,7 @@ impl<'a> MessageRead<'a> for Request {
                 Ok(10) => msg.request = mod_Request::OneOfrequest::get_version(r.read_message::<RequestGetVersion>(bytes)?),
                 Ok(18) => msg.request = mod_Request::OneOfrequest::get_master_fingerprint(r.read_message::<RequestGetMasterFingerprint>(bytes)?),
                 Ok(26) => msg.request = mod_Request::OneOfrequest::get_extended_pubkey(r.read_message::<RequestGetExtendedPubkey>(bytes)?),
+                Ok(34) => msg.request = mod_Request::OneOfrequest::register_wallet(r.read_message::<RequestRegisterWallet>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -227,13 +304,14 @@ impl<'a> MessageRead<'a> for Request {
     }
 }
 
-impl MessageWrite for Request {
+impl<'a> MessageWrite for Request<'a> {
     fn get_size(&self) -> usize {
         0
         + match self.request {
             mod_Request::OneOfrequest::get_version(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::get_master_fingerprint(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::get_extended_pubkey(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Request::OneOfrequest::register_wallet(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::None => 0,
     }    }
 
@@ -241,6 +319,7 @@ impl MessageWrite for Request {
         match self.request {            mod_Request::OneOfrequest::get_version(ref m) => { w.write_with_tag(10, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::get_master_fingerprint(ref m) => { w.write_with_tag(18, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::get_extended_pubkey(ref m) => { w.write_with_tag(26, |w| w.write_message(m))? },
+            mod_Request::OneOfrequest::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::None => {},
     }        Ok(())
     }
@@ -252,14 +331,15 @@ use alloc::vec::Vec;
 use super::*;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum OneOfrequest {
+pub enum OneOfrequest<'a> {
     get_version(RequestGetVersion),
     get_master_fingerprint(RequestGetMasterFingerprint),
     get_extended_pubkey(RequestGetExtendedPubkey),
+    register_wallet(RequestRegisterWallet<'a>),
     None,
 }
 
-impl Default for OneOfrequest {
+impl<'a> Default for OneOfrequest<'a> {
     fn default() -> Self {
         OneOfrequest::None
     }
@@ -281,7 +361,8 @@ impl<'a> MessageRead<'a> for Response<'a> {
                 Ok(10) => msg.response = mod_Response::OneOfresponse::get_version(r.read_message::<ResponseGetVersion>(bytes)?),
                 Ok(18) => msg.response = mod_Response::OneOfresponse::get_master_fingerprint(r.read_message::<ResponseGetMasterFingerprint>(bytes)?),
                 Ok(26) => msg.response = mod_Response::OneOfresponse::get_extended_pubkey(r.read_message::<ResponseGetExtendedPubkey>(bytes)?),
-                Ok(34) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
+                Ok(34) => msg.response = mod_Response::OneOfresponse::register_wallet(r.read_message::<ResponseRegisterWallet>(bytes)?),
+                Ok(42) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -297,6 +378,7 @@ impl<'a> MessageWrite for Response<'a> {
             mod_Response::OneOfresponse::get_version(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::get_master_fingerprint(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::get_extended_pubkey(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Response::OneOfresponse::register_wallet(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::error(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::None => 0,
     }    }
@@ -305,7 +387,8 @@ impl<'a> MessageWrite for Response<'a> {
         match self.response {            mod_Response::OneOfresponse::get_version(ref m) => { w.write_with_tag(10, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::get_master_fingerprint(ref m) => { w.write_with_tag(18, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::get_extended_pubkey(ref m) => { w.write_with_tag(26, |w| w.write_message(m))? },
-            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(42, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::None => {},
     }        Ok(())
     }
@@ -321,6 +404,7 @@ pub enum OneOfresponse<'a> {
     get_version(ResponseGetVersion<'a>),
     get_master_fingerprint(ResponseGetMasterFingerprint),
     get_extended_pubkey(ResponseGetExtendedPubkey<'a>),
+    register_wallet(ResponseRegisterWallet<'a>),
     error(ResponseError<'a>),
     None,
 }

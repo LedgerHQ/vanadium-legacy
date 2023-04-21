@@ -64,6 +64,7 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
             OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()?),
             OneOfrequest::get_master_fingerprint(_) => OneOfresponse::get_master_fingerprint(handle_get_master_fingerprint()?),
             OneOfrequest::get_extended_pubkey(req) => OneOfresponse::get_extended_pubkey(handle_get_extended_pubkey(req)?),
+            OneOfrequest::register_wallet(req) => OneOfresponse::register_wallet(handle_register_wallet(req)?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };

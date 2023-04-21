@@ -1,37 +1,49 @@
 syntax = "proto3";
 
 message RequestGetVersion {
-};
+}
 
 message ResponseGetVersion {
   string version = 1;
-};
+}
 
 message RequestGetMasterFingerprint {
-};
+}
 
 message ResponseGetMasterFingerprint {
   uint32 fingerprint = 1;
-};
+}
 
 message RequestGetExtendedPubkey {
   bool display = 1;
   repeated uint32 bip32_path = 2;
-};
+}
 
 message ResponseGetExtendedPubkey {
   string pubkey = 1;
-};
+}
+
+message RequestRegisterWallet {
+  string name = 1;
+  string descriptor_template = 2;
+  repeated string keys_info = 3;
+}
+
+message ResponseRegisterWallet {
+  bytes wallet_id = 1;
+  bytes wallet_hmac = 2;
+}
 
 message ResponseError {
   string error_msg = 1;
-};
+}
 
 message Request {
   oneof request {
     RequestGetVersion get_version = 1;
     RequestGetMasterFingerprint get_master_fingerprint = 2;
     RequestGetExtendedPubkey get_extended_pubkey = 3;
+    RequestRegisterWallet register_wallet = 4;
   }
 }
 
@@ -40,6 +52,7 @@ message Response {
     ResponseGetVersion get_version = 1;
     ResponseGetMasterFingerprint get_master_fingerprint = 2;
     ResponseGetExtendedPubkey get_extended_pubkey = 3;
-    ResponseError error = 4;
+    ResponseRegisterWallet register_wallet = 4;
+    ResponseError error = 5;
   }
 }
