@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\"\x13\n\x11RequestGetVersion\"%\n\x12ResponseGetVersion\x12\x0f\n\x07version\x18\x01 \x01(\t\"\x1d\n\x1bRequestGetMasterFingerprint\"3\n\x1cResponseGetMasterFingerprint\x12\x13\n\x0b\x66ingerprint\x18\x01 \x01(\r\"?\n\x18RequestGetExtendedPubkey\x12\x0f\n\x07\x64isplay\x18\x01 \x01(\x08\x12\x12\n\nbip32_path\x18\x02 \x03(\r\"+\n\x19ResponseGetExtendedPubkey\x12\x0e\n\x06pubkey\x18\x01 \x01(\t\"U\n\x15RequestRegisterWallet\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1b\n\x13\x64\x65scriptor_template\x18\x02 \x01(\t\x12\x11\n\tkeys_info\x18\x03 \x03(\t\"@\n\x16ResponseRegisterWallet\x12\x11\n\twallet_id\x18\x01 \x01(\x0c\x12\x13\n\x0bwallet_hmac\x18\x02 \x01(\x0c\"\"\n\rResponseError\x12\x11\n\terror_msg\x18\x01 \x01(\t\"\xec\x01\n\x07Request\x12)\n\x0bget_version\x18\x01 \x01(\x0b\x32\x12.RequestGetVersionH\x00\x12>\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1c.RequestGetMasterFingerprintH\x00\x12\x38\n\x13get_extended_pubkey\x18\x03 \x01(\x0b\x32\x19.RequestGetExtendedPubkeyH\x00\x12\x31\n\x0fregister_wallet\x18\x04 \x01(\x0b\x32\x16.RequestRegisterWalletH\x00\x42\t\n\x07request\"\x93\x02\n\x08Response\x12*\n\x0bget_version\x18\x01 \x01(\x0b\x32\x13.ResponseGetVersionH\x00\x12?\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1d.ResponseGetMasterFingerprintH\x00\x12\x39\n\x13get_extended_pubkey\x18\x03 \x01(\x0b\x32\x1a.ResponseGetExtendedPubkeyH\x00\x12\x32\n\x0fregister_wallet\x18\x04 \x01(\x0b\x32\x17.ResponseRegisterWalletH\x00\x12\x1f\n\x05\x65rror\x18\x05 \x01(\x0b\x32\x0e.ResponseErrorH\x00\x42\n\n\x08responseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\"\x13\n\x11RequestGetVersion\"%\n\x12ResponseGetVersion\x12\x0f\n\x07version\x18\x01 \x01(\t\"\x1d\n\x1bRequestGetMasterFingerprint\"3\n\x1cResponseGetMasterFingerprint\x12\x13\n\x0b\x66ingerprint\x18\x01 \x01(\r\"?\n\x18RequestGetExtendedPubkey\x12\x0f\n\x07\x64isplay\x18\x01 \x01(\x08\x12\x12\n\nbip32_path\x18\x02 \x03(\r\"+\n\x19ResponseGetExtendedPubkey\x12\x0e\n\x06pubkey\x18\x01 \x01(\t\"U\n\x15RequestRegisterWallet\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1b\n\x13\x64\x65scriptor_template\x18\x02 \x01(\t\x12\x11\n\tkeys_info\x18\x03 \x03(\t\"@\n\x16ResponseRegisterWallet\x12\x11\n\twallet_id\x18\x01 \x01(\x0c\x12\x13\n\x0bwallet_hmac\x18\x02 \x01(\x0c\"\xb9\x01\n\x17RequestGetWalletAddress\x12\x0f\n\x07\x64isplay\x18\x01 \x01(\x08\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x1b\n\x13\x64\x65scriptor_template\x18\x03 \x01(\t\x12\x11\n\tkeys_info\x18\x04 \x03(\t\x12\x18\n\x0bwallet_hmac\x18\x05 \x01(\x0cH\x00\x88\x01\x01\x12\x0e\n\x06\x63hange\x18\x06 \x01(\x08\x12\x15\n\raddress_index\x18\x07 \x01(\rB\x0e\n\x0c_wallet_hmac\"+\n\x18ResponseGetWalletAddress\x12\x0f\n\x07\x61\x64\x64ress\x18\x01 \x01(\t\"\"\n\rResponseError\x12\x11\n\terror_msg\x18\x01 \x01(\t\"\xa4\x02\n\x07Request\x12)\n\x0bget_version\x18\x01 \x01(\x0b\x32\x12.RequestGetVersionH\x00\x12>\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1c.RequestGetMasterFingerprintH\x00\x12\x38\n\x13get_extended_pubkey\x18\x03 \x01(\x0b\x32\x19.RequestGetExtendedPubkeyH\x00\x12\x31\n\x0fregister_wallet\x18\x04 \x01(\x0b\x32\x16.RequestRegisterWalletH\x00\x12\x36\n\x12get_wallet_address\x18\x05 \x01(\x0b\x32\x18.RequestGetWalletAddressH\x00\x42\t\n\x07request\"\xcc\x02\n\x08Response\x12*\n\x0bget_version\x18\x01 \x01(\x0b\x32\x13.ResponseGetVersionH\x00\x12?\n\x16get_master_fingerprint\x18\x02 \x01(\x0b\x32\x1d.ResponseGetMasterFingerprintH\x00\x12\x39\n\x13get_extended_pubkey\x18\x03 \x01(\x0b\x32\x1a.ResponseGetExtendedPubkeyH\x00\x12\x32\n\x0fregister_wallet\x18\x04 \x01(\x0b\x32\x17.ResponseRegisterWalletH\x00\x12\x37\n\x12get_wallet_address\x18\x05 \x01(\x0b\x32\x19.ResponseGetWalletAddressH\x00\x12\x1f\n\x05\x65rror\x18\x06 \x01(\x0b\x32\x0e.ResponseErrorH\x00\x42\n\n\x08responseb\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'message_pb2', globals())
@@ -36,10 +36,14 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _REQUESTREGISTERWALLET._serialized_end=356
   _RESPONSEREGISTERWALLET._serialized_start=358
   _RESPONSEREGISTERWALLET._serialized_end=422
-  _RESPONSEERROR._serialized_start=424
-  _RESPONSEERROR._serialized_end=458
-  _REQUEST._serialized_start=461
-  _REQUEST._serialized_end=697
-  _RESPONSE._serialized_start=700
-  _RESPONSE._serialized_end=975
+  _REQUESTGETWALLETADDRESS._serialized_start=425
+  _REQUESTGETWALLETADDRESS._serialized_end=610
+  _RESPONSEGETWALLETADDRESS._serialized_start=612
+  _RESPONSEGETWALLETADDRESS._serialized_end=655
+  _RESPONSEERROR._serialized_start=657
+  _RESPONSEERROR._serialized_end=691
+  _REQUEST._serialized_start=694
+  _REQUEST._serialized_end=986
+  _RESPONSE._serialized_start=989
+  _RESPONSE._serialized_end=1321
 # @@protoc_insertion_point(module_scope)

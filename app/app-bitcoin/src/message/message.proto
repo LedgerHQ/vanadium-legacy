@@ -34,6 +34,20 @@ message ResponseRegisterWallet {
   bytes wallet_hmac = 2;
 }
 
+message RequestGetWalletAddress {
+  bool display = 1;
+  string name = 2;
+  string descriptor_template = 3;
+  repeated string keys_info = 4;
+  optional bytes wallet_hmac = 5;
+  bool change = 6;
+  uint32 address_index = 7;
+}
+
+message ResponseGetWalletAddress {
+  string address = 1;
+}
+
 message ResponseError {
   string error_msg = 1;
 }
@@ -44,6 +58,7 @@ message Request {
     RequestGetMasterFingerprint get_master_fingerprint = 2;
     RequestGetExtendedPubkey get_extended_pubkey = 3;
     RequestRegisterWallet register_wallet = 4;
+    RequestGetWalletAddress get_wallet_address = 5;
   }
 }
 
@@ -53,6 +68,7 @@ message Response {
     ResponseGetMasterFingerprint get_master_fingerprint = 2;
     ResponseGetExtendedPubkey get_extended_pubkey = 3;
     ResponseRegisterWallet register_wallet = 4;
-    ResponseError error = 5;
+    ResponseGetWalletAddress get_wallet_address = 5;
+    ResponseError error = 6;
   }
 }

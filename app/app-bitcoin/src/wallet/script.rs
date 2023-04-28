@@ -2,9 +2,12 @@ use core::str::FromStr;
 
 use alloc::{boxed::Box, vec};
 
+use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::ScriptBuf;
+use bitcoin::{ScriptBuf, PubkeyHash};
 use bitcoin::bip32::{ExtendedPubKey, ChildNumber};
+
+use crate::crypto::hash160;
 
 use super::wallet::{WalletPolicy, DescriptorTemplate, KeyPlaceholder, KeyInformation};
 
@@ -17,7 +20,18 @@ pub trait ToScript {
     ) -> Result<Box<ScriptBuf>, &'static str>;
 }
 
-impl DescriptorTemplate {
+
+pub trait ToScriptWithKeyInfo {
+    fn to_script(
+        &self,
+        key_information: &[KeyInformation],
+        is_change: bool,
+        address_index: u32,
+    ) -> Result<Box<ScriptBuf>, &'static str>;
+}
+
+
+impl ToScriptWithKeyInfo for DescriptorTemplate {
     fn to_script(
         &self,
         key_information: &[KeyInformation],
@@ -27,7 +41,7 @@ impl DescriptorTemplate {
         let secp = Secp256k1::new();
 
         let derive = |kp: &KeyPlaceholder| -> Result<ExtendedPubKey, &'static str> {
-            let change_step = if is_change { kp.num1 } else { kp.num2 };
+            let change_step = if is_change { kp.num2 } else { kp.num1 };
 
             let key_info = key_information
                 .get(kp.key_index as usize)
@@ -47,7 +61,8 @@ impl DescriptorTemplate {
             DescriptorTemplate::Sh(_) => todo!(),
             DescriptorTemplate::Wsh(_) => todo!(),
             DescriptorTemplate::Pkh(kp) => {
-                let pubkey_hash = derive(kp)?.to_pub().pubkey_hash(); // TODO: use own hash160 instead of Secp256k1...
+                let pubkey = derive(kp)?.to_pub().to_bytes();
+                let pubkey_hash = PubkeyHash::from_byte_array(hash160(&pubkey));
                 ScriptBuf::new_p2pkh(&pubkey_hash)
             },
             DescriptorTemplate::Wpkh(_) => todo!(),

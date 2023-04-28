@@ -8,7 +8,7 @@ import argparse
 from argparse import ArgumentParser
 from typing import Optional
 
-from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestGetExtendedPubkey, RequestRegisterWallet, Request, Response
+from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestGetExtendedPubkey, RequestRegisterWallet, RequestGetWalletAddress, Request, Response
 from util import bip32_path_to_list
 
 # TODO: make a proper package for the stream.py module
@@ -69,8 +69,8 @@ class Btc:
         return
 
     def register_wallet_prepare_request(self, args: argparse.Namespace):
-        if args.name is None:
-            print("Missing --name argument")
+        if args.name == "":
+            print("Missing or empty --name argument")
             sys.exit()
 
         if args.descriptor_template is None:
@@ -105,6 +105,40 @@ class Btc:
         print(f"hmac: {response.register_wallet.wallet_hmac}")
         return
 
+    def get_wallet_address_prepare_request(self, args: argparse.Namespace):
+        if args.descriptor_template is None:
+            print("Missing --descriptor_template argument")
+            sys.exit()
+
+        if args.keys_info is None:
+            print("Missing --keys_info")
+            sys.exit()
+
+        try:
+            keys_info = json.loads(args.keys_info)
+        except json.decoder.JSONDecodeError:
+            print("key_info is not valid JSON")
+            sys.exit()
+
+        get_wallet_address = RequestGetWalletAddress()
+        get_wallet_address.name = args.name
+        get_wallet_address.descriptor_template = args.descriptor_template
+        get_wallet_address.keys_info.extend(keys_info)
+        get_wallet_address.change = args.change
+        get_wallet_address.address_index = args.address_index
+        message = Request()
+        message.get_wallet_address.CopyFrom(get_wallet_address)
+
+        assert message.WhichOneof("request") == "get_wallet_address"
+        return message.SerializeToString()
+
+    def get_wallet_address_parse_response(self, data: Optional[bytes]):
+        response = Response()
+        response.ParseFromString(data)
+        assert response.WhichOneof("response") == "get_wallet_address"
+        print(f"address: {response.get_wallet_address.address}")
+        return
+
 
 if __name__ == "__main__":
     parser: ArgumentParser = stream.get_stream_arg_parser()
@@ -123,18 +157,25 @@ if __name__ == "__main__":
     exclusive_group.add_argument("--register_wallet",
                                  help='Register a wallet policy',
                                  action='store_true')
+    exclusive_group.add_argument("--get_wallet_address",
+                                 help='Get the address for a wallet',
+                                 action='store_true')
+
 
     # TODO: should only enable arguments for the right command
     parser.add_argument('--path', help='A BIP-32 path')
     parser.add_argument('--display', help='Set if the user should validate the action on-screen', action='store_true')
 
-    parser.add_argument('--name', help='The name of a wallet policy')
+    parser.add_argument('--name', help='The name of a wallet policy', default="")
     parser.add_argument('--descriptor_template', help='A descriptor template')
     parser.add_argument('--keys_info', help='the keys information, as a json-encoded array of strings')
 
+    parser.add_argument('--change', type=bool, help='If present, request a change address', default=False)
+    parser.add_argument('--address_index', type=int, help='The address index', default=0)
+
     args = parser.parse_args()
 
-    actions = ["get_version", "get_master_fingerprint", "get_extended_pubkey", "register_wallet"]
+    actions = ["get_version", "get_master_fingerprint", "get_extended_pubkey", "register_wallet", "get_wallet_address"]
     action = None
     for act in actions:
         if getattr(args, act) is True:

@@ -57,8 +57,8 @@ pub fn ui_validate_wallet_policy(wallet_policy: &WalletPolicy) -> bool {
         ux.extend([
             UxItem {
                 icon: Some(&ICON_VALIDATE),
-                line1: "Accept",
-                line2: Some("and send"),
+                line1: "Register",
+                line2: Some("wallet"),
                 action: UxAction::Validate,
             },
             UxItem {
@@ -136,6 +136,7 @@ fn is_policy_name_acceptable(name: &str) -> bool {
 
 
 impl WalletPolicy {
+    // TODO
     fn is_acceptable(&self) -> bool {
         match self.descriptor_template {
             DescriptorTemplate::Pkh(_) => true,
