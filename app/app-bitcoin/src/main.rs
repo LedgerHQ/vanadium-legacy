@@ -5,10 +5,12 @@
 extern crate alloc;
 extern crate bitcoin;
 extern crate byteorder;
-extern crate quick_protobuf;
-extern crate vanadium_sdk;
-
+extern crate hex;
 extern crate hex_literal;
+extern crate nom;
+extern crate quick_protobuf;
+extern crate subtle;
+extern crate vanadium_sdk;
 
 #[cfg(not(target_arch = "riscv32"))]
 extern crate core;
@@ -19,6 +21,7 @@ mod ui;
 mod version;
 mod crypto;
 mod handlers;
+mod wallet;
 
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
@@ -61,6 +64,8 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
             OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()?),
             OneOfrequest::get_master_fingerprint(_) => OneOfresponse::get_master_fingerprint(handle_get_master_fingerprint()?),
             OneOfrequest::get_extended_pubkey(req) => OneOfresponse::get_extended_pubkey(handle_get_extended_pubkey(req)?),
+            OneOfrequest::register_wallet(req) => OneOfresponse::register_wallet(handle_register_wallet(req)?),
+            OneOfrequest::get_wallet_address(req) => OneOfresponse::get_wallet_address(handle_get_wallet_address(req)?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };

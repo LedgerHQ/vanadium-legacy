@@ -22,4 +22,4 @@ rustflags = [
 ]
 
 [build]
-target = "riscv32i-unknown-none-elf"
+target = "x86_64-unknown-linux-gnu"

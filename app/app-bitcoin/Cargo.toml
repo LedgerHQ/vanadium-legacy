@@ -10,7 +10,11 @@ path = "src/main.rs"
 [dependencies]
 bitcoin = { path = "rust-bitcoin/bitcoin", default-features = false, features = ["no-std"] }
 byteorder = { version = "1.4.3", default-features = false }
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+hex-literal = { version = "0.3.4" }
+nom = { version = "7.1.3", default-features = false, features = ["alloc"] }
 quick-protobuf = { version = "0.8.1", default-features = false }
+subtle = { version = "2.5.0", default-features = false }
 vanadium_sdk = { path = "../../rust-sdk" }
 
 [patch.crates-io.bitcoin_hashes]
@@ -21,7 +25,8 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
-strip = true
+debug = true
+strip = "none"
 opt-level = "z"
 #codegen-units = 1
 lto = true
