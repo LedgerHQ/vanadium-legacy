@@ -128,7 +128,7 @@ bool sys_ecdsa_sign(eret_t *eret, const guest_pointer_t p_key, const int mode,
     }
 
     size_t sig_size = sizeof(sig);
-    cx_err_t error = cx_ecdsa_sign_no_throw(&key, mode, hash_id, hash, hash_len, sig, sig_size, &info);
+    cx_err_t error = cx_ecdsa_sign_no_throw(&key, mode, hash_id, hash, hash_len, sig, &sig_size, &info);
     if (error != CX_OK || sig_size > sig_len) {
         return true;
     }
@@ -287,19 +287,24 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
     // TODO: no exception handling (unsupported when compiling natively)
 
     // derive the seed with bip32_path
-    os_perso_derive_node_bip32(CX_CURVE_256K1,
-                                (const uint32_t[]){},
-                                0,
-                                raw_private_key,
-                                chain_code);
+    os_perso_derive_node_bip32_nt(CX_CURVE_256K1,
+                                  (const uint32_t[]){},
+                                  0,
+                                  raw_private_key,
+                                  chain_code);
 
     // new private_key from raw
-    cx_ecfp_init_private_key(CX_CURVE_256K1,
-                                raw_private_key,
-                                sizeof(raw_private_key),
-                                &private_key);
+    ret = cx_ecfp_init_private_key_no_throw(CX_CURVE_256K1,
+                                            raw_private_key,
+                                            sizeof(raw_private_key),
+                                            &private_key);
+    if (ret < 0) {
+        eret->success = false;
+        return true;
+    }
+
     // generate corresponding public key
-    cx_ecfp_generate_pair(CX_CURVE_256K1, &public_key, &private_key, 1);
+    cx_ecfp_generate_pair_no_throw(CX_CURVE_256K1, &public_key, &private_key, 1);
 
     explicit_bzero(raw_private_key, sizeof(raw_private_key));
     explicit_bzero(chain_code, sizeof(chain_code));

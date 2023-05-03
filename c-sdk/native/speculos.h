@@ -20,9 +20,10 @@ void os_perso_derive_node_bip32(cx_curve_t curve,
                                 unsigned char *privateKey,
                                 unsigned char *chain);
 
-#define cx_ecdsa_sign sys_cx_ecdsa_sign
-
+cx_err_t cx_keccak_init_no_throw(cx_sha3_t *hash, size_t size);
+int cx_sha256_init(cx_sha256_t *hash);
 cx_err_t cx_sha256_init_no_throw(cx_sha256_t *hash);
+cx_err_t cx_ripemd160_init_no_throw(cx_ripemd160_t *hash);
 
 cx_err_t cx_hash_no_throw(cx_hash_t *hash,
                           uint32_t mode,
@@ -40,33 +41,13 @@ unsigned long sys_cx_ecfp_init_public_key(cx_curve_t curve,
                                           const unsigned char *rawkey,
                                           unsigned int key_len,
                                           cx_ecfp_public_key_t *key);
-int sys_cx_ecfp_generate_pair(cx_curve_t curve,
-                              cx_ecfp_public_key_t *public_key,
-                              cx_ecfp_private_key_t *private_key,
-                              int keep_private);
-int sys_cx_ecfp_generate_pair2(cx_curve_t curve,
-                               cx_ecfp_public_key_t *public_key,
-                               cx_ecfp_private_key_t *private_key,
-                               int keep_private,
-                               cx_md_t hashID);
-int sys_cx_ecfp_init_private_key(cx_curve_t curve,
-                                 const uint8_t *raw_key,
-                                 unsigned int key_len,
-                                 cx_ecfp_private_key_t *key);
 int sys_cx_ecdh(const cx_ecfp_private_key_t *key,
                 int mode,
                 const uint8_t *public_point,
                 size_t P_len,
                 uint8_t *secret,
                 size_t secret_len);
-int sys_cx_ecdsa_sign(const cx_ecfp_private_key_t *key,
-                      int mode,
-                      cx_md_t hashID,
-                      const uint8_t *hash,
-                      unsigned int hash_len,
-                      uint8_t *sig,
-                      unsigned int sig_len,
-                      unsigned int *info);
+\
 int sys_cx_ecdsa_verify(const cx_ecfp_public_key_t *key,
                         int mode,
                         cx_md_t hashID,
@@ -339,3 +320,15 @@ static inline bool os_perso_derive_node_bip32_nt(cx_curve_t curve,
     /* XXX: speculos exits if an error is encountered */
     return true;
 }
+
+unsigned long sys_cx_hash(cx_hash_t *hash, int mode, const uint8_t *in, size_t len, uint8_t *out, size_t out_len);
+int sys_cx_hash_sha256(const uint8_t *in, size_t len, uint8_t *out, size_t out_len);
+int sys_cx_hash_ripemd160(const uint8_t *in, size_t len, uint8_t *out, size_t out_len);
+int sys_cx_ripemd160_init(cx_ripemd160_t *hash);
+int spec_cx_ripemd160_update(cx_ripemd160_t *ctx, const uint8_t *data, size_t len);
+int spec_cx_ripemd160_final(cx_ripemd160_t *ctx, uint8_t *digest);
+
+int cx_ripemd160_init(cx_ripemd160_t *hash);
+
+int sys_cx_math_mult(uint8_t *r, const uint8_t *a, const uint8_t *b, unsigned int len);
+int sys_cx_math_multm(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, unsigned int len);

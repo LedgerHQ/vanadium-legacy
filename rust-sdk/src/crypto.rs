@@ -1,5 +1,3 @@
-#[cfg(test)]
-use hex_literal::hex;
 
 use crate::{
     ecall_hash_update, fatal, ecall::{ecall_hash_final, ecall_derive_node_bip32, ecall_cx_ecfp_generate_pair, ecall_get_random_bytes, ecall_ecdsa_verify, ecall_get_master_fingerprint}, SdkError
@@ -284,44 +282,50 @@ impl EcfpPrivateKey {
     }
 }
 
-#[test]
-fn test_ripemd160() {
-    let buffer = hex!("616263");
+#[cfg(test)]
+mod tests {
+    use hex_literal::hex;
+    use super::*;
 
-    let digest = CtxRipeMd160::new().update(&buffer).r#final();
+    #[test]
+    fn test_ripemd160() {
+        let buffer = hex!("616263");
 
-    assert_eq!(digest, hex!("8eb208f7e05d987a9b044a8e98c6b087f15a0bfc"));
-}
+        let digest = CtxRipeMd160::new().update(&buffer).r#final();
 
-#[test]
-fn test_sha256() {
-    let buffer = hex!("616263");
+        assert_eq!(digest, hex!("8eb208f7e05d987a9b044a8e98c6b087f15a0bfc"));
+    }
 
-    let digest = CtxSha256::new().update(&buffer).r#final();
+    #[test]
+    fn test_sha256() {
+        let buffer = hex!("616263");
 
-    assert_eq!(
-        digest,
-        hex!("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
-    );
-}
+        let digest = CtxSha256::new().update(&buffer).r#final();
 
-#[test]
-fn test_sha3() {
-    assert_eq!(
-        CtxSha3::new().update(&hex!("")).r#final(),
-        hex!("C5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470")
-    );
-    assert_eq!(
-        CtxSha3::new().update(&hex!("41FB")).r#final(),
-        hex!("A8EACEDA4D47B3281A795AD9E1EA2122B407BAF9AABCB9E18B5717B7873537D2")
-    );
-    assert_eq!(
-        CtxSha3::new().update(b"Hello").r#final(),
-        hex!("06b3dfaec148fb1bb2b066f10ec285e7c9bf402ab32aa78a5d38e34566810cd2")
-    );
-    let data = &hex!("836b35a026743e823a90a0ee3b91bf615c6a757e2b60b9e1dc1826fd0dd16106f7bc1e8179f665015f43c6c81f39062fc2086ed849625c06e04697698b21855e");
-    assert_eq!(
-        CtxSha3::new().update(data).r#final(),
-        hex!("72f15d6555488541650ce62c0bed7abd61247635c1973eb38474a2516ed1d884")
-    );
+        assert_eq!(
+            digest,
+            hex!("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        );
+    }
+
+    #[test]
+    fn test_sha3() {
+        assert_eq!(
+            CtxSha3::new().update(&hex!("")).r#final(),
+            hex!("C5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470")
+        );
+        assert_eq!(
+            CtxSha3::new().update(&hex!("41FB")).r#final(),
+            hex!("A8EACEDA4D47B3281A795AD9E1EA2122B407BAF9AABCB9E18B5717B7873537D2")
+        );
+        assert_eq!(
+            CtxSha3::new().update(b"Hello").r#final(),
+            hex!("06b3dfaec148fb1bb2b066f10ec285e7c9bf402ab32aa78a5d38e34566810cd2")
+        );
+        let data = &hex!("836b35a026743e823a90a0ee3b91bf615c6a757e2b60b9e1dc1826fd0dd16106f7bc1e8179f665015f43c6c81f39062fc2086ed849625c06e04697698b21855e");
+        assert_eq!(
+            CtxSha3::new().update(data).r#final(),
+            hex!("72f15d6555488541650ce62c0bed7abd61247635c1973eb38474a2516ed1d884")
+        );
+    }
 }

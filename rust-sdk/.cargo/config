@@ -2,8 +2,8 @@
 rustflags = [
   "-L../c-sdk/build/native",
   "-L./lib/x64/",
-  "-lcxng",
   "-lsdk",
+  "-lcxng",
   "-lspeculos",
   "-lcrypto",
 ]
@@ -18,4 +18,4 @@ rustflags = [
 ]
 
 [build]
-target = "riscv32i-unknown-none-elf"
+target = "x86_64-unknown-linux-gnu"
