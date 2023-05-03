@@ -128,7 +128,7 @@ bool sys_ecdsa_sign(eret_t *eret, const guest_pointer_t p_key, const int mode,
     }
 
     size_t sig_size = sizeof(sig);
-    cx_err_t error = cx_ecdsa_sign_no_throw(&key, mode, hash_id, hash, hash_len, sig, &sig_size, &info);
+    cx_err_t error = cx_ecdsa_sign_no_throw(&key, mode, hash_id, hash, hash_len, sig, sig_size, &info);
     if (error != CX_OK || sig_size > sig_len) {
         return true;
     }
