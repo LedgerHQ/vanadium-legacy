@@ -31,9 +31,20 @@ pub fn get_compressed_pubkey(key: &EcfpPublicKey) -> [u8; 33] {
 }
 
 
+pub fn sha256(data: &[u8]) -> [u8; 32] {
+    CtxSha256::new().update(&data).r#final()
+}
+
+pub fn ripemd160(data: &[u8]) -> [u8; 20] {
+    CtxRipeMd160::new().update(&data).r#final()
+}
+
 pub fn hash160(data: &[u8]) -> [u8; 20] {
-    let sha256 = CtxSha256::new().update(&data).r#final();
-    CtxRipeMd160::new().update(&sha256).r#final()
+    ripemd160(&sha256(&data))
+}
+
+pub fn hash256(data: &[u8]) -> [u8; 32] {
+    sha256(&sha256(&data))
 }
 
 pub fn get_key_fingerprint(key: &EcfpPublicKey) -> u32 {
@@ -102,7 +113,9 @@ mod tests {
             output
         );
     }
-    
+
+    // TODO: add test for other hash functions
+
     #[test]
     fn test_get_key_fingerprint() {
         let key = EcfpPublicKey::new(CxCurve::Secp256k1, &hex!("0452972572d465d016d4c501887b8df303eee3ed602c056b1eb09260dfa0da0ab288742f4dc97d9edb6fd946babc002fdfb06f26caf117b9405ed79275763fdb1c"));
