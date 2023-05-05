@@ -159,6 +159,7 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
             DescriptorTemplate::Tr(_, _) => todo!(),
             DescriptorTemplate::Zero => todo!(),
             DescriptorTemplate::One => todo!(),
+            DescriptorTemplate::Pk(_) => todo!(),
             DescriptorTemplate::Pk_k(_) => todo!(),
             DescriptorTemplate::Pk_h(_) => todo!(),
             DescriptorTemplate::Older(_) => todo!(),
@@ -177,6 +178,18 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
             DescriptorTemplate::Thresh(_, _) => todo!(),
             DescriptorTemplate::Multi(_, _) => todo!(),
             DescriptorTemplate::Multi_a(_, _) => todo!(),
+
+            // wrappers
+            DescriptorTemplate::A(_) => todo!(),
+            DescriptorTemplate::S(_) => todo!(),
+            DescriptorTemplate::C(_) => todo!(),
+            DescriptorTemplate::T(_) => todo!(),
+            DescriptorTemplate::D(_) => todo!(),
+            DescriptorTemplate::V(_) => todo!(),
+            DescriptorTemplate::J(_) => todo!(),
+            DescriptorTemplate::N(_) => todo!(),
+            DescriptorTemplate::L(_) => todo!(),
+            DescriptorTemplate::U(_) => todo!(),
         };
 
         Ok(Box::new(result))

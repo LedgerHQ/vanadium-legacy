@@ -6,7 +6,7 @@ use hex::{self, FromHex};
 
 use nom::{
     bytes::complete::{tag, take_while_m_n, take},
-    character::complete::{char, digit1},
+    character::complete::{alpha1, char, digit1},
     combinator::{map, map_res, opt, cut, verify, all_consuming},
     Finish,
     IResult,
@@ -59,6 +59,7 @@ pub enum DescriptorTemplate {
 
     Zero,
     One,
+    Pk(KeyPlaceholder),
     Pk_k(KeyPlaceholder),
     Pk_h(KeyPlaceholder),
     Older(u32),
@@ -77,6 +78,37 @@ pub enum DescriptorTemplate {
     Thresh(u32, Vec<DescriptorTemplate>),
     Multi(u32, Vec<KeyPlaceholder>),
     Multi_a(u32, Vec<KeyPlaceholder>),
+
+    // wrappers
+    A(Box<DescriptorTemplate>),
+    S(Box<DescriptorTemplate>),
+    C(Box<DescriptorTemplate>),
+    T(Box<DescriptorTemplate>),
+    D(Box<DescriptorTemplate>),
+    V(Box<DescriptorTemplate>),
+    J(Box<DescriptorTemplate>),
+    N(Box<DescriptorTemplate>),
+    L(Box<DescriptorTemplate>),
+    U(Box<DescriptorTemplate>),
+}
+
+impl DescriptorTemplate {
+    /// Determines if root fragment is a wrapper.
+    fn is_wrapper(&self) -> bool {
+        match &self {
+            DescriptorTemplate::A(_) => true,
+            DescriptorTemplate::S(_) => true,
+            DescriptorTemplate::C(_) => true,
+            DescriptorTemplate::T(_) => true,
+            DescriptorTemplate::D(_) => true,
+            DescriptorTemplate::V(_) => true,
+            DescriptorTemplate::J(_) => true,
+            DescriptorTemplate::N(_) => true,
+            DescriptorTemplate::L(_) => true,
+            DescriptorTemplate::U(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -136,7 +168,10 @@ fn parse_descriptor_template(input: &str) -> Result<DescriptorTemplate, &'static
                 Err("Failed to parse descriptor template: extra input remaining")
             }
         },
-        Err(_) => Err("Failed to parse descriptor template"),
+        Err(e) => {
+            println!("{:?}", e);
+            Err("Failed to parse descriptor template")
+        },
     }
 }
 
@@ -243,7 +278,11 @@ fn parse_key_placeholder(input: &str) -> IResult<&str, KeyPlaceholder> {
 
 
 fn parse_descriptor(input: &str) -> IResult<&str, DescriptorTemplate> {
-    let (input, descriptor) = nom::branch::alt((
+    let (input, wrappers) = opt(terminated(alpha1, char(':')))(input)?;
+
+    let wrappers = wrappers.unwrap_or("");
+
+    let (input, inner_descriptor) = alt((
         parse_sh,
         parse_wsh,
         parse_pkh,
@@ -255,6 +294,7 @@ fn parse_descriptor(input: &str) -> IResult<&str, DescriptorTemplate> {
         parse_tr,
         parse_zero,
         parse_one,
+        parse_pk,
         parse_pk_k,
         parse_pk_h,
         parse_older,
@@ -263,7 +303,7 @@ fn parse_descriptor(input: &str) -> IResult<&str, DescriptorTemplate> {
         parse_ripemd160,
         parse_hash256,
         parse_hash160,
-        nom::branch::alt((
+        alt((
             parse_andor,
             parse_and_b,
             parse_and_v,
@@ -274,7 +314,26 @@ fn parse_descriptor(input: &str) -> IResult<&str, DescriptorTemplate> {
             parse_thresh,
         )),
     ))(input)?;
-    Ok((input, descriptor))
+
+    let mut result = inner_descriptor;
+
+    for wrapper in wrappers.chars().rev() {
+        match wrapper {
+            'a' => { result = DescriptorTemplate::A(Box::new(result)) }
+            's' => { result = DescriptorTemplate::S(Box::new(result)) }
+            'c' => { result = DescriptorTemplate::C(Box::new(result)) }
+            't' => { result = DescriptorTemplate::T(Box::new(result)) }
+            'd' => { result = DescriptorTemplate::D(Box::new(result)) }
+            'v' => { result = DescriptorTemplate::V(Box::new(result)) }
+            'j' => { result = DescriptorTemplate::J(Box::new(result)) }
+            'n' => { result = DescriptorTemplate::N(Box::new(result)) }
+            'l' => { result = DescriptorTemplate::L(Box::new(result)) }
+            'u' => { result = DescriptorTemplate::U(Box::new(result)) }
+            _ => return Err(nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Alpha))),
+        }
+    }
+
+    Ok((input, result))
 }
 
 
@@ -392,6 +451,10 @@ fn parse_fragment_with_hex32(
 
         Ok((input, template_constructor(decoded)))
     }
+}
+
+fn parse_pk(input: &str) -> IResult<&str, DescriptorTemplate> {
+    parse_fragment_with_placeholder("pk", DescriptorTemplate::Pk)(input)
 }
 
 fn parse_pkh(input: &str) -> IResult<&str, DescriptorTemplate> {
@@ -529,7 +592,7 @@ fn parse_or_i(input: &str) -> IResult<&str, DescriptorTemplate> {
 }
 
 fn parse_thresh(input: &str) -> IResult<&str, DescriptorTemplate> {
-    let (input, k) = preceded(tag("thresh("), parse_number_up_to(u32::MAX))(input)?;
+    let (input, k) = delimited(tag("thresh("), parse_number_up_to(u32::MAX), char(','))(input)?;
 
     let (input, scripts) = verify(
         terminated(separated_list1(char(','), parse_descriptor), char(')')),
@@ -688,7 +751,7 @@ impl ToDescriptor for DescriptorTemplate {
         address_index: u32,
     ) -> Result<String, &'static str> {
         // converts a single placeholder to its string expression in a descriptor
-        let fmt_kp = |key_placeholder: &KeyPlaceholder, is_change: bool, address_index: u32| -> Result<String, _> {
+        let fmt_kp = |key_placeholder: &KeyPlaceholder, is_change: bool, address_index: u32| -> Result<String, &'static str> {
             let key_info = key_information
                 .get(key_placeholder.key_index as usize)
                 .ok_or("Invalid key index")
@@ -701,12 +764,22 @@ impl ToDescriptor for DescriptorTemplate {
         };
 
         // converts a slice of placeholder to its string expression in a descriptor
-        let fmt_kps = |key_placeholders: &[KeyPlaceholder], is_change: bool, address_index: u32| -> Result<String, _> {
+        let fmt_kps = |key_placeholders: &[KeyPlaceholder], is_change: bool, address_index: u32| -> Result<String, &'static str> {
             Ok(key_placeholders
                 .iter()
                 .map(|key_placeholder| fmt_kp(key_placeholder, is_change, address_index))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","))
+        };
+
+        // formats a wrapper
+        let fmt_wrapper = |wrapper_name: &str, inner: &DescriptorTemplate| -> Result<String, &'static str> {
+            let inner_desc = inner.to_descriptor(key_information, is_change, address_index)?;
+            if inner.is_wrapper() {
+                Ok(format!("{}{}", wrapper_name, inner_desc))
+            } else {
+                Ok(format!("{}:{}", wrapper_name, inner_desc))
+            }
         };
 
         match self {
@@ -737,6 +810,7 @@ impl ToDescriptor for DescriptorTemplate {
             },
             DescriptorTemplate::Zero => Ok("0".to_string()),
             DescriptorTemplate::One => Ok("1".to_string()),
+            DescriptorTemplate::Pk(kp) => Ok(format!("pk({})", fmt_kp(kp, is_change, address_index)?)),
             DescriptorTemplate::Pk_k(kp) => Ok(format!("pk_k({})", fmt_kp(kp, is_change, address_index)?)),
             DescriptorTemplate::Pk_h(kp) => Ok(format!("pk_h({})", fmt_kp(kp, is_change, address_index)?)),
             DescriptorTemplate::Older(n) => Ok(format!("older({})", n)),
@@ -795,12 +869,22 @@ impl ToDescriptor for DescriptorTemplate {
             DescriptorTemplate::Multi_a(threshold, kps) => {
                 Ok(format!("multi_a({}, {})", threshold, fmt_kps(kps, is_change, address_index)?))
             },
+            DescriptorTemplate::A(inner) => fmt_wrapper("a", inner),
+            DescriptorTemplate::S(inner) => fmt_wrapper("s", inner),
+            DescriptorTemplate::C(inner) => fmt_wrapper("c", inner),
+            DescriptorTemplate::T(inner) => fmt_wrapper("t", inner),
+            DescriptorTemplate::D(inner) => fmt_wrapper("d", inner),
+            DescriptorTemplate::V(inner) => fmt_wrapper("v", inner),
+            DescriptorTemplate::J(inner) => fmt_wrapper("j", inner),
+            DescriptorTemplate::N(inner) => fmt_wrapper("n", inner),
+            DescriptorTemplate::L(inner) => fmt_wrapper("l", inner),
+            DescriptorTemplate::U(inner) => fmt_wrapper("u", inner),
         }
     }
 }
 
 
-// TODO: add tests fro to_descriptor
+// TODO: add tests for to_descriptor
 
 #[cfg(test)]
 mod tests {
@@ -993,12 +1077,20 @@ mod tests {
         assert!(parse_tr("tr(@0/*/0)").is_err());
     }
 
-
     #[test]
     fn test_parse_valid_descriptor_templates() {
+
+        assert!(parse_descriptor("sln:older(12960)").is_ok());
+        assert!(parse_thresh("thresh(3,pk(@0/**),s:pk(@1/**),s:pk(@2/**),sln:older(12960))").is_ok());
+
+
+
         let test_cases = vec![
             "wsh(sortedmulti(2,@0/**,@1/**))",
             "sh(wsh(sortedmulti(2,@0/**,@1/**)))",
+            "wsh(c:pk_k(@0/**))",
+            "wsh(or_d(pk(@0/**),pkh(@1/**)))",
+            "wsh(thresh(3,pk(@0/**),s:pk(@1/**),s:pk(@2/**),sln:older(12960)))",
         ];
 
         for input in test_cases {
