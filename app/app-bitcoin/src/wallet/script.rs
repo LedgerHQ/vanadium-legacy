@@ -3,27 +3,23 @@ use core::str::FromStr;
 
 use alloc::{boxed::Box, vec, vec::Vec};
 
-
+use bitcoin::bip32::{ChildNumber, ExtendedPubKey};
 use bitcoin::hashes::Hash;
-use bitcoin::opcodes::all::*;
+use bitcoin::opcodes::{all::*, OP_0};
+use bitcoin::script::Builder;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::{ScriptBuf, PubkeyHash, WPubkeyHash, ScriptHash, WScriptHash, PublicKey, Script};
-use bitcoin::bip32::{ExtendedPubKey, ChildNumber};
+use bitcoin::{PubkeyHash, PublicKey, ScriptBuf, ScriptHash, WPubkeyHash, WScriptHash};
 
 use crate::crypto::{hash160, sha256};
 
-use super::wallet::{WalletPolicy, DescriptorTemplate, KeyPlaceholder, KeyInformation};
+use super::wallet::{DescriptorTemplate, KeyInformation, KeyPlaceholder, WalletPolicy};
 
-const MAX_PUBKEYS_PER_MULTISIG: u8 = 16;
+const MAX_PUBKEYS_PER_MULTISIG: usize = 20;
+const MAX_PUBKEYS_PER_MULTI_A: usize = 999;
 
 pub trait ToScript {
-    fn to_script(
-        &self,
-        is_change: bool,
-        address_index: u32,
-    ) -> Result<Box<ScriptBuf>, &'static str>;
+    fn to_script(&self, is_change: bool, address_index: u32) -> Result<ScriptBuf, &'static str>;
 }
-
 
 pub trait ToScriptWithKeyInfo {
     fn to_script(
@@ -31,44 +27,51 @@ pub trait ToScriptWithKeyInfo {
         key_information: &[KeyInformation],
         is_change: bool,
         address_index: u32,
-    ) -> Result<Box<ScriptBuf>, &'static str>;
+    ) -> Result<ScriptBuf, &'static str>;
 }
-
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum ScriptContextType { None, Wsh, Tr }
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-struct ScriptContext {
-    context_type: ScriptContextType,
-    v: bool,
+enum ScriptContext {
+    None,
+    Wsh,
+    Tr,
 }
 
-impl ScriptContext {
-    fn new() -> ScriptContext {
-        ScriptContext {
-            context_type: ScriptContextType::None,
-            v: false,
-        }
-    }
-    fn with_v(&self) -> ScriptContext {
-        ScriptContext {
-            context_type: self.context_type,
-            v: true,
-        }
-    }
-}
-
+// TODO: refactoring this as a method of Builder might simplify the code
 trait ToScriptWithKeyInfoInner {
     fn to_script_inner(
         &self,
         key_information: &[KeyInformation],
         is_change: bool,
         address_index: u32,
-        ctx: ScriptContext
-    ) -> Result<Box<ScriptBuf>, &'static str>;
+        builder: Builder,
+        ctx: ScriptContext,
+    ) -> Result<Builder, &'static str>;
 }
 
+trait CanPushInnerScript {
+    fn push_inner_script(
+        self,
+        desc: &DescriptorTemplate,
+        key_information: &[KeyInformation],
+        is_change: bool,
+        address_index: u32,
+        ctx: ScriptContext,
+    ) -> Result<Builder, &'static str>;
+}
+
+impl CanPushInnerScript for Builder {
+    fn push_inner_script(
+        self,
+        desc: &DescriptorTemplate,
+        key_information: &[KeyInformation],
+        is_change: bool,
+        address_index: u32,
+        ctx: ScriptContext,
+    ) -> Result<Builder, &'static str> {
+        desc.to_script_inner(key_information, is_change, address_index, self, ctx)
+    }
+}
 
 impl ToScriptWithKeyInfoInner for DescriptorTemplate {
     fn to_script_inner(
@@ -76,8 +79,9 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
         key_information: &[KeyInformation],
         is_change: bool,
         address_index: u32,
-        ctx: ScriptContext
-    ) -> Result<Box<ScriptBuf>, &'static str> {
+        mut builder: Builder,
+        ctx: ScriptContext,
+    ) -> Result<Builder, &'static str> {
         let secp = Secp256k1::new();
 
         let derive = |kp: &KeyPlaceholder| -> Result<ExtendedPubKey, &'static str> {
@@ -87,52 +91,78 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                 .get(kp.key_index as usize)
                 .ok_or("Invalid key index")?;
 
-            let root_pubkey = ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
+            let root_pubkey =
+                ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
 
-            let change_step = ChildNumber::from_normal_idx(change_step).map_err(|_| "Invalid change derivation step")?;
-            let addr_index_step = ChildNumber::from_normal_idx(address_index).map_err(|_| "Invalid address index derivation step")?;
+            let change_step = ChildNumber::from_normal_idx(change_step)
+                .map_err(|_| "Invalid change derivation step")?;
+            let addr_index_step = ChildNumber::from_normal_idx(address_index)
+                .map_err(|_| "Invalid address index derivation step")?;
 
             root_pubkey
                 .derive_pub(&secp, &vec![change_step, addr_index_step])
                 .map_err(|_| "Failed to produce derived key")
         };
-        
-        let result: ScriptBuf = match self {
+
+        builder = match self {
             DescriptorTemplate::Sh(inner) => {
-                let inner_script = inner.to_script(key_information, is_change, address_index)?;
-                let script_hash = ScriptHash::from_byte_array(hash160(&inner_script.as_bytes()));
-                ScriptBuf::new_p2sh(&script_hash)
-            },
+                let mut inner_builder = Builder::new();
+                inner_builder = inner.to_script_inner(
+                    key_information,
+                    is_change,
+                    address_index,
+                    inner_builder,
+                    ctx,
+                )?;
+                let script_hash = ScriptHash::from_byte_array(hash160(&inner_builder.as_bytes()));
+
+                builder
+                    .push_opcode(OP_HASH160)
+                    .push_slice(script_hash)
+                    .push_opcode(OP_EQUAL)
+            }
             DescriptorTemplate::Wsh(inner) => {
-                let inner_script = inner.to_script(key_information, is_change, address_index)?;
-                let script_hash = WScriptHash::from_byte_array(sha256(&inner_script.as_bytes()));
-                ScriptBuf::new_v0_p2wsh(&script_hash)
-            },
+                let mut inner_builder = Builder::new();
+                inner_builder = inner.to_script_inner(
+                    key_information,
+                    is_change,
+                    address_index,
+                    inner_builder,
+                    ctx,
+                )?;
+                let script_hash = WScriptHash::from_byte_array(sha256(&inner_builder.as_bytes()));
+                builder.push_int(0).push_slice(script_hash)
+            }
             DescriptorTemplate::Pkh(kp) => {
                 let pubkey = derive(kp)?.to_pub();
                 let pubkey_hash = PubkeyHash::from_byte_array(hash160(&pubkey.to_bytes()));
-                ScriptBuf::new_p2pkh(&pubkey_hash)
-            },
+
+                builder
+                    .push_opcode(OP_DUP)
+                    .push_opcode(OP_HASH160)
+                    .push_slice(pubkey_hash)
+                    .push_opcode(OP_EQUALVERIFY)
+                    .push_opcode(OP_CHECKSIG)
+            }
             DescriptorTemplate::Wpkh(kp) => {
                 let pubkey = derive(kp)?.to_pub();
                 let pubkey_hash = WPubkeyHash::from_byte_array(hash160(&pubkey.to_bytes()));
-                ScriptBuf::new_v0_p2wpkh(&pubkey_hash)
-            },
-            DescriptorTemplate::Sortedmulti(k, kps) => {
-                if ctx.context_type == ScriptContextType::Tr {
-                    return Err("sortedmulti is not valid on taproot");
+
+                builder.push_int(0).push_slice(pubkey_hash)
+            }
+            DescriptorTemplate::Sortedmulti(k, kps) | DescriptorTemplate::Multi(k, kps) => {
+                if ctx == ScriptContext::Tr {
+                    return Err("multi and sortedmulti are not valid on taproot");
                 }
 
-                let mut res = ScriptBuf::new();
-
-                if kps.len() > (MAX_PUBKEYS_PER_MULTISIG as usize) {
-                    return Err("Too many keys for multisig")
+                if kps.len() > MAX_PUBKEYS_PER_MULTISIG {
+                    return Err("Too many keys for multisig");
                 }
                 if *k == 0 || (*k as usize) > kps.len() {
-                    return Err("Invalig multisig quorum")
+                    return Err("Invalig multisig quorum");
                 }
 
-                res.push_opcode(((*k as u8) + 0x50u8).into()); // TODO: check if correct
+                builder = builder.push_int(*k as i64);
 
                 let mut keys = kps
                     .iter()
@@ -142,57 +172,240 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                     })
                     .collect::<Result<Vec<PublicKey>, &'static str>>()?;
 
-                keys.sort();
-
-                for key in keys {
-                    let key_arr: [u8; 33] = key.to_bytes().as_slice().try_into().map_err(|_| "Wrong key length")?;
-                    res.push_slice(&key_arr);
+                if matches!(self, DescriptorTemplate::Sortedmulti(_, _)) {
+                    keys.sort();
                 }
 
-                res.push_opcode(((kps.len() as u8) + 0x50u8).into()); // TODO: check if correct
+                for key in keys {
+                    builder = builder.push_key(&key);
+                }
 
-                res.push_opcode(OP_CHECKMULTISIG); // TODO: handle :v case
+                builder
+                    .push_int(kps.len() as i64) // TODO: check if correct
+                    .push_opcode(OP_CHECKMULTISIG)
+            }
+            DescriptorTemplate::Sortedmulti_a(k, kps) | DescriptorTemplate::Multi_a(k, kps) => {
+                if ctx != ScriptContext::Tr {
+                    return Err("multi_a and sortedmulti_a are only valid on taproot");
+                }
 
-                res
-            },
-            DescriptorTemplate::Sortedmulti_a(_, _) => todo!(),
-            DescriptorTemplate::Tr(_, _) => todo!(),
-            DescriptorTemplate::Zero => todo!(),
-            DescriptorTemplate::One => todo!(),
-            DescriptorTemplate::Pk(_) => todo!(),
-            DescriptorTemplate::Pk_k(_) => todo!(),
-            DescriptorTemplate::Pk_h(_) => todo!(),
-            DescriptorTemplate::Older(_) => todo!(),
-            DescriptorTemplate::After(_) => todo!(),
-            DescriptorTemplate::Sha256(_) => todo!(),
-            DescriptorTemplate::Ripemd160(_) => todo!(),
-            DescriptorTemplate::Hash256(_) => todo!(),
-            DescriptorTemplate::Hash160(_) => todo!(),
-            DescriptorTemplate::Andor(_, _, _) => todo!(),
-            DescriptorTemplate::And_v(_, _) => todo!(),
-            DescriptorTemplate::And_b(_, _) => todo!(),
-            DescriptorTemplate::Or_b(_, _) => todo!(),
-            DescriptorTemplate::Or_c(_, _) => todo!(),
-            DescriptorTemplate::Or_d(_, _) => todo!(),
-            DescriptorTemplate::Or_i(_, _) => todo!(),
-            DescriptorTemplate::Thresh(_, _) => todo!(),
-            DescriptorTemplate::Multi(_, _) => todo!(),
-            DescriptorTemplate::Multi_a(_, _) => todo!(),
+                if kps.len() > MAX_PUBKEYS_PER_MULTI_A {
+                    return Err("Too many keys for multisig");
+                }
+                if *k == 0 || (*k as usize) > kps.len() {
+                    return Err("Invalig multisig quorum");
+                }
+
+                let mut keys = kps
+                    .iter()
+                    .map(|kp| derive(kp))
+                    .map(|derived_key_result| {
+                        derived_key_result.map(|extended_pub_key| extended_pub_key.to_pub())
+                    })
+                    .collect::<Result<Vec<PublicKey>, &'static str>>()?;
+
+                if matches!(self, DescriptorTemplate::Sortedmulti_a(_, _)) {
+                    keys.sort();
+                }
+
+                for (idx, key) in keys.iter().enumerate() {
+                    // skip the first bytes, as they are x-only keys
+                    let key_arr: [u8; 32] = key.to_bytes().as_slice()[1..]
+                        .try_into()
+                        .map_err(|_| "Wrong key length")?;
+                    // let x_only_key X
+                    builder = builder.push_slice(key_arr);
+
+                    if idx == 0 {
+                        builder = builder.push_opcode(OP_CHECKSIG);
+                    } else {
+                        builder = builder.push_opcode(OP_CHECKSIGADD);
+                    }
+                }
+
+                builder.push_int(*k as i64).push_opcode(OP_NUMEQUAL)
+            }
+            DescriptorTemplate::Tr(_, _) => todo!(), // TODO: handle tr
+            DescriptorTemplate::Zero => builder.push_opcode(OP_0),
+            DescriptorTemplate::One => builder.push_opcode(OP_PUSHNUM_1),
+            DescriptorTemplate::Pk(k) => {
+                // c:pk_k(key)
+                let desc = DescriptorTemplate::C(Box::new(DescriptorTemplate::Pk_k(*k)));
+                desc.to_script_inner(key_information, is_change, address_index, builder, ctx)?
+            }
+            DescriptorTemplate::Pk_k(kp) => {
+                let key = derive(kp)?;
+                if ctx == ScriptContext::Tr {
+                    builder.push_x_only_key(&key.to_x_only_pub())
+                } else {
+                    builder.push_key(&key.to_pub())
+                }
+            }
+            DescriptorTemplate::Pk_h(kp) => {
+                let rip: [u8; 20];
+                if ctx == ScriptContext::Tr {
+                    let key = derive(kp)?.to_x_only_pub();
+                    let key_arr: [u8; 32] = key
+                        .serialize()
+                        .as_slice()
+                        .try_into()
+                        .map_err(|_| "Wrong key length")?;
+                    rip = hash160(&key_arr);
+                } else {
+                    let key = derive(kp)?.to_pub();
+                    let key_arr: [u8; 33] = key
+                        .to_bytes()
+                        .as_slice()
+                        .try_into()
+                        .map_err(|_| "Wrong key length")?;
+                    rip = hash160(&key_arr);
+                }
+
+                builder
+                    .push_opcode(OP_DUP)
+                    .push_opcode(OP_HASH160)
+                    .push_slice(&rip)
+                    .push_opcode(OP_EQUALVERIFY)
+            }
+            DescriptorTemplate::Older(n) => builder.push_int(*n as i64).push_opcode(OP_CSV),
+            DescriptorTemplate::After(n) => builder.push_int(*n as i64).push_opcode(OP_CLTV),
+            DescriptorTemplate::Sha256(h) => builder
+                .push_opcode(OP_SIZE)
+                .push_int(32)
+                .push_opcode(OP_EQUALVERIFY)
+                .push_opcode(OP_SHA256)
+                .push_slice(h)
+                .push_opcode(OP_EQUAL),
+            DescriptorTemplate::Hash256(h) => builder
+                .push_opcode(OP_SIZE)
+                .push_int(32)
+                .push_opcode(OP_EQUALVERIFY)
+                .push_opcode(OP_HASH256)
+                .push_slice(h)
+                .push_opcode(OP_EQUAL),
+            DescriptorTemplate::Ripemd160(h) => builder
+                .push_opcode(OP_SIZE)
+                .push_int(32)
+                .push_opcode(OP_EQUALVERIFY)
+                .push_opcode(OP_RIPEMD160)
+                .push_slice(h)
+                .push_opcode(OP_EQUAL),
+            DescriptorTemplate::Hash160(h) => builder
+                .push_opcode(OP_SIZE)
+                .push_int(32)
+                .push_opcode(OP_EQUALVERIFY)
+                .push_opcode(OP_HASH160)
+                .push_slice(h)
+                .push_opcode(OP_EQUAL),
+            DescriptorTemplate::Andor(x, y, z) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_NOTIF)
+                .push_inner_script(y, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ELSE)
+                .push_inner_script(z, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::And_v(x, y) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_inner_script(y, key_information, is_change, address_index, ctx)?,
+            DescriptorTemplate::And_b(x, y) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_inner_script(y, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_BOOLAND),
+            DescriptorTemplate::And_n(x, y) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_NOTIF)
+                .push_opcode(OP_0)
+                .push_opcode(OP_ELSE)
+                .push_inner_script(y, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::Or_b(x, z) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_inner_script(z, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_BOOLOR),
+            DescriptorTemplate::Or_c(x, z) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_NOTIF)
+                .push_inner_script(z, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::Or_d(x, z) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_IFDUP)
+                .push_opcode(OP_NOTIF)
+                .push_inner_script(z, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::Or_i(x, z) => builder
+                .push_opcode(OP_IF)
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ELSE)
+                .push_inner_script(z, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::Thresh(k, scripts) => {
+                for (i, x_i) in scripts.iter().enumerate() {
+                    builder = builder.push_inner_script(
+                        x_i,
+                        key_information,
+                        is_change,
+                        address_index,
+                        ctx,
+                    )?;
+                    if i > 0 {
+                        builder = builder.push_opcode(OP_ADD);
+                    }
+                }
+
+                builder.push_int(*k as i64).push_opcode(OP_EQUAL)
+            }
 
             // wrappers
-            DescriptorTemplate::A(_) => todo!(),
-            DescriptorTemplate::S(_) => todo!(),
-            DescriptorTemplate::C(_) => todo!(),
-            DescriptorTemplate::T(_) => todo!(),
-            DescriptorTemplate::D(_) => todo!(),
-            DescriptorTemplate::V(_) => todo!(),
-            DescriptorTemplate::J(_) => todo!(),
-            DescriptorTemplate::N(_) => todo!(),
-            DescriptorTemplate::L(_) => todo!(),
-            DescriptorTemplate::U(_) => todo!(),
+            DescriptorTemplate::A(x) => builder
+                .push_opcode(OP_TOALTSTACK)
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_FROMALTSTACK),
+            DescriptorTemplate::S(x) => builder.push_opcode(OP_SWAP).push_inner_script(
+                x,
+                key_information,
+                is_change,
+                address_index,
+                ctx,
+            )?,
+            DescriptorTemplate::C(x) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_CHECKSIG),
+            DescriptorTemplate::T(x) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_PUSHNUM_1),
+            DescriptorTemplate::D(x) => builder
+                .push_opcode(OP_DUP)
+                .push_opcode(OP_IF)
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::V(x) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_verify(),
+            DescriptorTemplate::J(x) => builder
+                .push_opcode(OP_SIZE)
+                .push_opcode(OP_0NOTEQUAL)
+                .push_opcode(OP_IF)
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::N(x) => builder
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_0NOTEQUAL),
+            DescriptorTemplate::L(x) => builder
+                .push_opcode(OP_IF)
+                .push_opcode(OP_0)
+                .push_opcode(OP_ELSE)
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ENDIF),
+            DescriptorTemplate::U(x) => builder
+                .push_opcode(OP_IF)
+                .push_inner_script(x, key_information, is_change, address_index, ctx)?
+                .push_opcode(OP_ELSE)
+                .push_opcode(OP_0)
+                .push_opcode(OP_ENDIF),
         };
 
-        Ok(Box::new(result))
+        Ok(builder)
     }
 }
 
@@ -202,17 +415,26 @@ impl ToScriptWithKeyInfo for DescriptorTemplate {
         key_information: &[KeyInformation],
         is_change: bool,
         address_index: u32,
-    ) -> Result<Box<ScriptBuf>, &'static str> {
-        self.to_script_inner(key_information, is_change, address_index, ScriptContext::new())
+    ) -> Result<ScriptBuf, &'static str> {
+        let builder = Builder::new();
+        Ok(self
+            .to_script_inner(
+                key_information,
+                is_change,
+                address_index,
+                builder,
+                ScriptContext::None,
+            )?
+            .as_script()
+            .into())
     }
 }
 
 impl ToScript for WalletPolicy {
-    fn to_script(
-        &self,
-        is_change: bool,
-        address_index: u32,
-    ) -> Result<Box<ScriptBuf>, &'static str> {
-        self.descriptor_template.to_script(&self.key_information, is_change, address_index)
+    fn to_script(&self, is_change: bool, address_index: u32) -> Result<ScriptBuf, &'static str> {
+        self.descriptor_template
+            .to_script(&self.key_information, is_change, address_index)
     }
 }
+
+// TODO: add tests

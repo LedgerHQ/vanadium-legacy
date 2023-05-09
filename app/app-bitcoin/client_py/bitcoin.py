@@ -12,7 +12,8 @@ from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestG
 from util import bip32_path_to_list
 
 # TODO: make a proper package for the stream.py module
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", "host"))
+sys.path.append(os.path.join(os.path.dirname(
+    os.path.realpath(__file__)), "..", "..", "..", "host"))
 
 import stream  # noqa: E402
 
@@ -161,21 +162,26 @@ if __name__ == "__main__":
                                  help='Get the address for a wallet',
                                  action='store_true')
 
-
     # TODO: should only enable arguments for the right command
     parser.add_argument('--path', help='A BIP-32 path')
-    parser.add_argument('--display', help='Set if the user should validate the action on-screen', action='store_true')
+    parser.add_argument(
+        '--display', help='Set if the user should validate the action on-screen', action='store_true')
 
-    parser.add_argument('--name', help='The name of a wallet policy', default="")
+    parser.add_argument(
+        '--name', help='The name of a wallet policy', default="")
     parser.add_argument('--descriptor_template', help='A descriptor template')
-    parser.add_argument('--keys_info', help='the keys information, as a json-encoded array of strings')
+    parser.add_argument(
+        '--keys_info', help='the keys information, as a json-encoded array of strings')
 
-    parser.add_argument('--change', type=bool, help='If present, request a change address', default=False)
-    parser.add_argument('--address_index', type=int, help='The address index', default=0)
+    parser.add_argument('--change', type=bool,
+                        help='If present, request a change address', default=False)
+    parser.add_argument('--address_index', type=int,
+                        help='The address index', default=0)
 
     args = parser.parse_args()
 
-    actions = ["get_version", "get_master_fingerprint", "get_extended_pubkey", "register_wallet", "get_wallet_address"]
+    actions = ["get_version", "get_master_fingerprint",
+               "get_extended_pubkey", "register_wallet", "get_wallet_address"]
     action = None
     for act in actions:
         if getattr(args, act) is True:
