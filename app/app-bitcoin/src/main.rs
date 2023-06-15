@@ -1,5 +1,4 @@
 #![feature(start)]
-
 #![cfg_attr(target_arch = "riscv32", no_std, no_main)]
 
 extern crate alloc;
@@ -15,12 +14,12 @@ extern crate vanadium_sdk;
 #[cfg(not(target_arch = "riscv32"))]
 extern crate core;
 
+mod crypto;
 mod error;
+mod handlers;
 mod message;
 mod ui;
 mod version;
-mod crypto;
-mod handlers;
 mod wallet;
 
 use alloc::borrow::Cow;
@@ -38,7 +37,6 @@ use message::message::*;
 use vanadium_sdk::fatal;
 
 use handlers::*;
-
 
 fn set_error(msg: &'_ str) -> ResponseError {
     ResponseError {
@@ -62,10 +60,19 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
     let response = Response {
         response: match request.request {
             OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()?),
-            OneOfrequest::get_master_fingerprint(_) => OneOfresponse::get_master_fingerprint(handle_get_master_fingerprint()?),
-            OneOfrequest::get_extended_pubkey(req) => OneOfresponse::get_extended_pubkey(handle_get_extended_pubkey(req)?),
-            OneOfrequest::register_wallet(req) => OneOfresponse::register_wallet(handle_register_wallet(req)?),
-            OneOfrequest::get_wallet_address(req) => OneOfresponse::get_wallet_address(handle_get_wallet_address(req)?),
+            OneOfrequest::get_master_fingerprint(_) => {
+                OneOfresponse::get_master_fingerprint(handle_get_master_fingerprint()?)
+            }
+            OneOfrequest::get_extended_pubkey(req) => {
+                OneOfresponse::get_extended_pubkey(handle_get_extended_pubkey(req)?)
+            }
+            OneOfrequest::register_wallet(req) => {
+                OneOfresponse::register_wallet(handle_register_wallet(req)?)
+            }
+            OneOfrequest::get_wallet_address(req) => {
+                OneOfresponse::get_wallet_address(handle_get_wallet_address(req)?)
+            }
+            OneOfrequest::sign_psbt(req) => OneOfresponse::sign_psbt(handle_sign_psbt(req)?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };
@@ -113,7 +120,6 @@ pub fn atexit(_f: *const u8) {
 pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
     main(_argc, _argv)
 }
-
 
 #[start]
 pub fn main(_: isize, _: *const *const u8) -> isize {

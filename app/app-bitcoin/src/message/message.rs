@@ -339,6 +339,126 @@ impl<'a> MessageWrite for ResponseGetWalletAddress<'a> {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct RequestSignPsbt<'a> {
+    pub psbt: Cow<'a, [u8]>,
+    pub name: Cow<'a, str>,
+    pub descriptor_template: Cow<'a, str>,
+    pub keys_info: Vec<Cow<'a, str>>,
+    pub wallet_hmac: Cow<'a, [u8]>,
+}
+
+impl<'a> MessageRead<'a> for RequestSignPsbt<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.psbt = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.name = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.descriptor_template = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(34) => msg.keys_info.push(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(42) => msg.wallet_hmac = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for RequestSignPsbt<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.psbt == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.psbt).len()) }
+        + if self.name == "" { 0 } else { 1 + sizeof_len((&self.name).len()) }
+        + if self.descriptor_template == "" { 0 } else { 1 + sizeof_len((&self.descriptor_template).len()) }
+        + self.keys_info.iter().map(|s| 1 + sizeof_len((s).len())).sum::<usize>()
+        + if self.wallet_hmac == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.wallet_hmac).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.psbt != Cow::Borrowed(b"") { w.write_with_tag(10, |w| w.write_bytes(&**&self.psbt))?; }
+        if self.name != "" { w.write_with_tag(18, |w| w.write_string(&**&self.name))?; }
+        if self.descriptor_template != "" { w.write_with_tag(26, |w| w.write_string(&**&self.descriptor_template))?; }
+        for s in &self.keys_info { w.write_with_tag(34, |w| w.write_string(&**s))?; }
+        if self.wallet_hmac != Cow::Borrowed(b"") { w.write_with_tag(42, |w| w.write_bytes(&**&self.wallet_hmac))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct PartialSignature<'a> {
+    pub signature: Cow<'a, [u8]>,
+    pub public_key: Cow<'a, [u8]>,
+    pub leaf_hash: Cow<'a, [u8]>,
+}
+
+impl<'a> MessageRead<'a> for PartialSignature<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.signature = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.public_key = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.leaf_hash = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for PartialSignature<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.signature == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.signature).len()) }
+        + if self.public_key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.public_key).len()) }
+        + if self.leaf_hash == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.leaf_hash).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.signature != Cow::Borrowed(b"") { w.write_with_tag(10, |w| w.write_bytes(&**&self.signature))?; }
+        if self.public_key != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.public_key))?; }
+        if self.leaf_hash != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.leaf_hash))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct ResponseSignPsbt<'a> {
+    pub partial_signature: Vec<PartialSignature<'a>>,
+}
+
+impl<'a> MessageRead<'a> for ResponseSignPsbt<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.partial_signature.push(r.read_message::<PartialSignature>(bytes)?),
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for ResponseSignPsbt<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + self.partial_signature.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        for s in &self.partial_signature { w.write_with_tag(10, |w| w.write_message(s))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct ResponseError<'a> {
     pub error_msg: Cow<'a, str>,
 }
@@ -385,6 +505,7 @@ impl<'a> MessageRead<'a> for Request<'a> {
                 Ok(26) => msg.request = mod_Request::OneOfrequest::get_extended_pubkey(r.read_message::<RequestGetExtendedPubkey>(bytes)?),
                 Ok(34) => msg.request = mod_Request::OneOfrequest::register_wallet(r.read_message::<RequestRegisterWallet>(bytes)?),
                 Ok(42) => msg.request = mod_Request::OneOfrequest::get_wallet_address(r.read_message::<RequestGetWalletAddress>(bytes)?),
+                Ok(50) => msg.request = mod_Request::OneOfrequest::sign_psbt(r.read_message::<RequestSignPsbt>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -402,6 +523,7 @@ impl<'a> MessageWrite for Request<'a> {
             mod_Request::OneOfrequest::get_extended_pubkey(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::register_wallet(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::get_wallet_address(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Request::OneOfrequest::sign_psbt(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::None => 0,
     }    }
 
@@ -411,6 +533,7 @@ impl<'a> MessageWrite for Request<'a> {
             mod_Request::OneOfrequest::get_extended_pubkey(ref m) => { w.write_with_tag(26, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::get_wallet_address(ref m) => { w.write_with_tag(42, |w| w.write_message(m))? },
+            mod_Request::OneOfrequest::sign_psbt(ref m) => { w.write_with_tag(50, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::None => {},
     }        Ok(())
     }
@@ -428,6 +551,7 @@ pub enum OneOfrequest<'a> {
     get_extended_pubkey(RequestGetExtendedPubkey),
     register_wallet(RequestRegisterWallet<'a>),
     get_wallet_address(RequestGetWalletAddress<'a>),
+    sign_psbt(RequestSignPsbt<'a>),
     None,
 }
 
@@ -455,7 +579,8 @@ impl<'a> MessageRead<'a> for Response<'a> {
                 Ok(26) => msg.response = mod_Response::OneOfresponse::get_extended_pubkey(r.read_message::<ResponseGetExtendedPubkey>(bytes)?),
                 Ok(34) => msg.response = mod_Response::OneOfresponse::register_wallet(r.read_message::<ResponseRegisterWallet>(bytes)?),
                 Ok(42) => msg.response = mod_Response::OneOfresponse::get_wallet_address(r.read_message::<ResponseGetWalletAddress>(bytes)?),
-                Ok(50) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
+                Ok(50) => msg.response = mod_Response::OneOfresponse::sign_psbt(r.read_message::<ResponseSignPsbt>(bytes)?),
+                Ok(58) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -473,6 +598,7 @@ impl<'a> MessageWrite for Response<'a> {
             mod_Response::OneOfresponse::get_extended_pubkey(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::register_wallet(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::get_wallet_address(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Response::OneOfresponse::sign_psbt(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::error(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::None => 0,
     }    }
@@ -483,7 +609,8 @@ impl<'a> MessageWrite for Response<'a> {
             mod_Response::OneOfresponse::get_extended_pubkey(ref m) => { w.write_with_tag(26, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::get_wallet_address(ref m) => { w.write_with_tag(42, |w| w.write_message(m))? },
-            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(50, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::sign_psbt(ref m) => { w.write_with_tag(50, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(58, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::None => {},
     }        Ok(())
     }
@@ -501,6 +628,7 @@ pub enum OneOfresponse<'a> {
     get_extended_pubkey(ResponseGetExtendedPubkey<'a>),
     register_wallet(ResponseRegisterWallet<'a>),
     get_wallet_address(ResponseGetWalletAddress<'a>),
+    sign_psbt(ResponseSignPsbt<'a>),
     error(ResponseError<'a>),
     None,
 }

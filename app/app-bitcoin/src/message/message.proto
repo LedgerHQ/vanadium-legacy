@@ -48,6 +48,25 @@ message ResponseGetWalletAddress {
   string address = 1;
 }
 
+message RequestSignPsbt {
+  bytes psbt = 1;
+  string name = 2;
+  string descriptor_template = 3;
+  repeated string keys_info = 4;
+  optional bytes wallet_hmac = 5;
+}
+
+message PartialSignature {
+  bytes signature = 1;
+  bytes public_key = 2;
+  bytes leaf_hash = 3; // Optional. If it's not set, it will have the default value (empty).
+}
+
+message ResponseSignPsbt {
+  repeated PartialSignature partial_signatures = 1;
+}
+
+
 message ResponseError {
   string error_msg = 1;
 }
@@ -59,6 +78,7 @@ message Request {
     RequestGetExtendedPubkey get_extended_pubkey = 3;
     RequestRegisterWallet register_wallet = 4;
     RequestGetWalletAddress get_wallet_address = 5;
+    RequestSignPsbt sign_psbt = 6;
   }
 }
 
@@ -69,6 +89,7 @@ message Response {
     ResponseGetExtendedPubkey get_extended_pubkey = 3;
     ResponseRegisterWallet register_wallet = 4;
     ResponseGetWalletAddress get_wallet_address = 5;
-    ResponseError error = 6;
+    ResponseSignPsbt sign_psbt = 6;
+    ResponseError error = 7;
   }
 }

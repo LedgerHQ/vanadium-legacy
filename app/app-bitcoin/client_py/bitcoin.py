@@ -3,12 +3,13 @@
 import os
 import sys
 import json
+import base64
 
 import argparse
 from argparse import ArgumentParser
 from typing import Optional
 
-from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestGetExtendedPubkey, RequestRegisterWallet, RequestGetWalletAddress, Request, Response
+from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestGetExtendedPubkey, RequestRegisterWallet, RequestGetWalletAddress, RequestSignPsbt, Request, Response
 from util import bip32_path_to_list
 
 # TODO: make a proper package for the stream.py module
@@ -140,6 +141,45 @@ class Btc:
         print(f"address: {response.get_wallet_address.address}")
         return
 
+    def sign_psbt_prepare_request(self, args: argparse.Namespace):
+        if args.psbt is None:
+            print("Missing --psbt argument")
+            sys.exit()
+
+        if args.descriptor_template is None:
+            print("Missing --descriptor_template argument")
+            sys.exit()
+
+        if args.keys_info is None:
+            print("Missing --keys_info")
+            sys.exit()
+
+        try:
+            keys_info = json.loads(args.keys_info)
+        except json.decoder.JSONDecodeError:
+            print("key_info is not valid JSON")
+            sys.exit()
+
+        sign_psbt = RequestSignPsbt()
+        sign_psbt.name = args.name
+        sign_psbt.descriptor_template = args.descriptor_template
+        sign_psbt.keys_info.extend(keys_info)
+        sign_psbt.psbt = base64.b64decode(args.psbt)
+        message = Request()
+        message.sign_psbt.CopyFrom(sign_psbt)
+
+        assert message.WhichOneof("request") == "sign_psbt"
+        return message.SerializeToString()
+
+    def sign_psbt_parse_response(self, data: Optional[bytes]):
+        response = Response()
+        response.ParseFromString(data)
+        assert response.WhichOneof("response") == "sign_psbt"
+
+        print(f"{len(response.sign_psbt.partial_signatures)} signatures returned")
+
+        return
+
 
 if __name__ == "__main__":
     parser: ArgumentParser = stream.get_stream_arg_parser()
@@ -161,6 +201,9 @@ if __name__ == "__main__":
     exclusive_group.add_argument("--get_wallet_address",
                                  help='Get the address for a wallet',
                                  action='store_true')
+    exclusive_group.add_argument("--sign_psbt",
+                                 help='Sign a psbt with a policy',
+                                 action='store_true')
 
     # TODO: should only enable arguments for the right command
     parser.add_argument('--path', help='A BIP-32 path')
@@ -178,10 +221,12 @@ if __name__ == "__main__":
     parser.add_argument('--address_index', type=int,
                         help='The address index', default=0)
 
+    parser.add_argument('--psbt', help='A base64-encoded PSBT')
+
     args = parser.parse_args()
 
-    actions = ["get_version", "get_master_fingerprint",
-               "get_extended_pubkey", "register_wallet", "get_wallet_address"]
+    actions = ["get_version", "get_master_fingerprint", "get_extended_pubkey",
+               "register_wallet", "get_wallet_address", "sign_psbt"]
     action = None
     for act in actions:
         if getattr(args, act) is True:
