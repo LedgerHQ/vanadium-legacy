@@ -127,7 +127,8 @@ pub fn main(_: isize, _: *const *const u8) -> isize {
 
     vanadium_sdk::ux::ux_idle();
     loop {
-        let buffer = vanadium_sdk::xrecv(512);
+        // TODO: xrecv currently allocates up to the specified size; we would like to adjust dynamically
+        let buffer = vanadium_sdk::xrecv(2048);
 
         vanadium_sdk::ux::app_loading_start("Handling request...\x00");
 
