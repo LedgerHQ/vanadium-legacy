@@ -1,3 +1,8 @@
+// TODO:
+// - add type checks
+// - add malleability checks
+// - add stack limits and other safety checks
+
 use alloc::{
     boxed::Box,
     format,
@@ -102,6 +107,98 @@ pub enum DescriptorTemplate {
     U(Box<DescriptorTemplate>),
 }
 
+pub struct DescriptorTemplateIter<'a> {
+    fragments: Vec<&'a DescriptorTemplate>,
+    placeholders: Vec<&'a KeyPlaceholder>,
+}
+
+impl<'a> From<&'a DescriptorTemplate> for DescriptorTemplateIter<'a> {
+    fn from(desc: &'a DescriptorTemplate) -> Self {
+        let mut fragments = Vec::new();
+        fragments.push(desc);
+        DescriptorTemplateIter {
+            fragments,
+            placeholders: Vec::new(),
+        }
+    }
+}
+
+impl<'a> Iterator for DescriptorTemplateIter<'a> {
+    type Item = &'a KeyPlaceholder;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // If there are pending placeholders, pop and return one
+        if let Some(key) = self.placeholders.pop() {
+            return Some(key);
+        }
+
+        while let Some(desc) = self.fragments.pop() {
+            match desc {
+                DescriptorTemplate::Sh(sub)
+                | DescriptorTemplate::Wsh(sub)
+                | DescriptorTemplate::A(sub)
+                | DescriptorTemplate::S(sub)
+                | DescriptorTemplate::C(sub)
+                | DescriptorTemplate::T(sub)
+                | DescriptorTemplate::D(sub)
+                | DescriptorTemplate::V(sub)
+                | DescriptorTemplate::J(sub)
+                | DescriptorTemplate::N(sub)
+                | DescriptorTemplate::L(sub)
+                | DescriptorTemplate::U(sub) => {
+                    self.fragments.push(sub);
+                }
+
+                DescriptorTemplate::Andor(sub1, sub2, sub3) => {
+                    self.fragments.push(sub1);
+                    self.fragments.push(sub2);
+                    self.fragments.push(sub3);
+                }
+
+                DescriptorTemplate::Or_b(sub1, sub2)
+                | DescriptorTemplate::Or_c(sub1, sub2)
+                | DescriptorTemplate::Or_d(sub1, sub2)
+                | DescriptorTemplate::Or_i(sub1, sub2)
+                | DescriptorTemplate::And_v(sub1, sub2)
+                | DescriptorTemplate::And_b(sub1, sub2)
+                | DescriptorTemplate::And_n(sub1, sub2) => {
+                    self.fragments.push(sub1);
+                    self.fragments.push(sub2);
+                }
+
+                DescriptorTemplate::Tr(key, _)
+                | DescriptorTemplate::Pkh(key)
+                | DescriptorTemplate::Wpkh(key)
+                | DescriptorTemplate::Pk(key)
+                | DescriptorTemplate::Pk_k(key)
+                | DescriptorTemplate::Pk_h(key) => {
+                    return Some(key);
+                }
+
+                DescriptorTemplate::Sortedmulti(_, keys)
+                | DescriptorTemplate::Sortedmulti_a(_, keys)
+                | DescriptorTemplate::Multi(_, keys)
+                | DescriptorTemplate::Multi_a(_, keys) => {
+                    // Push keys onto the keys stack in reverse order
+                    for key in keys.iter().rev() {
+                        self.placeholders.push(key);
+                    }
+                }
+
+                DescriptorTemplate::Thresh(_, descs) => {
+                    for desc in descs.iter().rev() {
+                        self.fragments.push(desc);
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        None
+    }
+}
+
 impl DescriptorTemplate {
     /// Determines if root fragment is a wrapper.
     fn is_wrapper(&self) -> bool {
@@ -118,6 +215,9 @@ impl DescriptorTemplate {
             DescriptorTemplate::U(_) => true,
             _ => false,
         }
+    }
+    pub fn placeholders(&self) -> DescriptorTemplateIter {
+        DescriptorTemplateIter::from(self)
     }
 }
 
