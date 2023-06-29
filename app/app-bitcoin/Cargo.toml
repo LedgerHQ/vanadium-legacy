@@ -17,6 +17,9 @@ quick-protobuf = { version = "0.8.1", default-features = false }
 subtle = { version = "2.5.0", default-features = false }
 vanadium_sdk = { path = "../../rust-sdk" }
 
+[dev-dependencies]
+base64 = "0.21.2"
+
 [patch.crates-io.bitcoin_hashes]
 path = "./rust-bitcoin/hashes"
 

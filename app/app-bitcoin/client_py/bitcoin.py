@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import logging
 import os
 import sys
 import json
@@ -17,6 +18,8 @@ sys.path.append(os.path.join(os.path.dirname(
     os.path.realpath(__file__)), "..", "..", "..", "host"))
 
 import stream  # noqa: E402
+
+logging.basicConfig(filename='bitcoin.log', level=logging.DEBUG)
 
 
 class Btc:
@@ -176,7 +179,11 @@ class Btc:
         response.ParseFromString(data)
         assert response.WhichOneof("response") == "sign_psbt"
 
-        print(f"{len(response.sign_psbt.partial_signatures)} signatures returned")
+        n_sigs = len(response.sign_psbt.partial_signatures)
+        print(f"{n_sigs} signatures returned")
+        for partial_sig in response.sign_psbt.partial_signatures:
+            print(f"Pubkey: {partial_sig.public_key.hex()}")
+            print(f"Signature: {partial_sig.signature.hex()}")
 
         return
 

@@ -14,6 +14,9 @@ extern crate vanadium_sdk;
 #[cfg(not(target_arch = "riscv32"))]
 extern crate core;
 
+#[cfg(test)]
+extern crate base64;
+
 mod crypto;
 mod error;
 mod handlers;

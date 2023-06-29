@@ -37,13 +37,13 @@ const MAX_OLDER_AFTER: u32 = 2147483647; // maximum allowed in older/after
 
 const BASE58_ALPHABET: &str = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct KeyOrigin {
     pub fingerprint: u32,
     pub derivation_path: Vec<u32>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct KeyInformation {
     pub pubkey: String,
     pub origin_info: Option<KeyOrigin>,
