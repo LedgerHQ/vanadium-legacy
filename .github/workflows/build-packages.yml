@@ -1,7 +1,7 @@
-# Build app-streaming-builder and app-streaming-native-builder and push the
+# Build vanadium-builder and vanadium-native-builder and push the
 # resulting docker images to GitHub Packages.
 
-name: App Streaming Builder
+name: Vanadium Builder
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    name: Build and push app-streaming-builder image
+    name: Build and push vanadium-builder image
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -26,22 +26,22 @@ jobs:
         fetch-depth: 0
         token: ${{ secrets.CI_BOT_PAT }}
 
-    - name: Build and push app-streaming-builder to GitHub Packages
+    - name: Build and push vanadium-builder to GitHub Packages
       uses: docker/build-push-action@v1
       with:
         dockerfile: Dockerfile
-        repository: ledgerhq/app-streaming-builder
+        repository: ledgerhq/vanadium-builder
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
         tag_with_sha: true
         tags: latest
 
-    - name: Build and push app-streaming-native-builder to GitHub Packages
+    - name: Build and push vanadium-native-builder to GitHub Packages
       uses: docker/build-push-action@v1
       with:
         dockerfile: native.Dockerfile
-        repository: ledgerhq/app-streaming-native-builder
+        repository: ledgerhq/vanadium-native-builder
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

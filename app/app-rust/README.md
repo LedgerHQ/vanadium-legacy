@@ -13,7 +13,7 @@ These libraries can be retrieved from Docker images thanks to the script `lib/cr
 ./lib/create-lib.sh
 ```
 
-They are also generated as artifacts by the [GitHub CI](https://github.com/LedgerHQ/app-streaming/actions/workflows/apps.yml).
+They are also generated as artifacts by the [GitHub CI](https://github.com/LedgerHQ/vanadium/actions/workflows/apps.yml).
 
 ### Build
 

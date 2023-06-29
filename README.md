@@ -5,9 +5,9 @@
 
 ---
 
-## App Streaming
+## Vanadium
 
-The *App Streaming* project allows running any app on Ledger Nano devices (X, S+, Stax) without restrictions such as memory limitations. Basically, the Ledger Nano runs a VM which can launch any app ; the (unlimited) memory is exported encrypted on the PC or the smartphone of the user.
+The *Vanadium* project allows running any app on Ledger Nano devices (X, S+, Stax) without restrictions such as memory limitations. Basically, the Ledger Nano runs a VM which can launch any app ; the (unlimited) memory is exported encrypted on the PC or the smartphone of the user.
 
 For developers, development is now standard since there's no restriction on the stack, heap nor code size. Modern software stack can be used (which implies standard toolchains, tests, fuzzing tools and standard libraries) along usual development patterns. The code is totally independent from the firmware and the same app is compatible with Nano X, Nano S+ and Stax. An emulator such as speculos isn't required anymore and apps can be developed in Rust.
 
@@ -33,9 +33,9 @@ The Nano RISC-V VM app is in [vm/](vm/) and Python tools to interact with the VM
 
 Once the project will be adopted more broadly, it will be split into several repositories. Meanwhile, it's more convenient to work on a mono-repo.
 
-[![Build and test apps](https://github.com/LedgerHQ/app-streaming/actions/workflows/apps.yml/badge.svg)](https://github.com/LedgerHQ/app-streaming/actions/workflows/apps.yml)
-[![Build and test the Nano VM](https://github.com/LedgerHQ/app-streaming/actions/workflows/vm.yml/badge.svg)](https://github.com/LedgerHQ/app-streaming/actions/workflows/vm.yml)
-[![Build container images](https://github.com/LedgerHQ/app-streaming/actions/workflows/build-packages.yml/badge.svg)](https://github.com/LedgerHQ/app-streaming/actions/workflows/build-packages.yml)
+[![Build and test apps](https://github.com/LedgerHQ/vanadium/actions/workflows/apps.yml/badge.svg)](https://github.com/LedgerHQ/vanadium/actions/workflows/apps.yml)
+[![Build and test the Nano VM](https://github.com/LedgerHQ/vanadium/actions/workflows/vm.yml/badge.svg)](https://github.com/LedgerHQ/vanadium/actions/workflows/vm.yml)
+[![Build container images](https://github.com/LedgerHQ/vanadium/actions/workflows/build-packages.yml/badge.svg)](https://github.com/LedgerHQ/vanadium/actions/workflows/build-packages.yml)
 
 
 ### Documentation

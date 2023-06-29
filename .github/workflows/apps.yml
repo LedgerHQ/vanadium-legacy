@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/ledgerhq/app-streaming-builder:latest
+      image: ghcr.io/ledgerhq/vanadium-builder:latest
 
     steps:
       - name: Checkout
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/ledgerhq/app-streaming-native-builder:latest
+      image: ghcr.io/ledgerhq/vanadium-native-builder:latest
 
     steps:
       - name: Checkout
