@@ -1,14 +1,14 @@
 diff --git a/bitcoin/Cargo.toml b/bitcoin/Cargo.toml
-index e429b9d0..d4171e1e 100644
+index 24c0088..926aba8 100644
 --- a/bitcoin/Cargo.toml
 +++ b/bitcoin/Cargo.toml
 @@ -36,8 +36,8 @@ rustdoc-args = ["--cfg", "docsrs"]
  [dependencies]
- bitcoin-internals = { path = "../internals", package = "bitcoin-private", version = "0.1.0" }
+ internals = { package = "bitcoin-internals", version = "0.1.0", path = "../internals" }
  bech32 = { version = "0.9.0", default-features = false }
--bitcoin_hashes = { version = "0.12.0", default-features = false }
+-hashes = { package = "bitcoin_hashes", version = "0.12.0", default-features = false }
 -secp256k1 = { version = "0.27.0", default-features = false, features = ["bitcoin_hashes"] }
-+bitcoin_hashes = { path = "../hashes", default-features = false }
++hashes = { package = "bitcoin_hashes", path = "../hashes", default-features = false }
 +secp256k1 = { path = "../../rust-secp256k1", default-features = false, features = ["bitcoin_hashes"] }
  hex_lit = "0.1.1"
  
