@@ -1,9 +1,15 @@
 use alloc::{borrow::Cow, format, vec, vec::Vec};
 
-use crate::{message::message::{RequestRegisterWallet, ResponseRegisterWallet}, wallet::{WalletPolicy, DescriptorTemplate, self}};
+use crate::{
+    message::message::{RequestRegisterWallet, ResponseRegisterWallet},
+    wallet::{DescriptorTemplate, WalletPolicy},
+};
 
 #[cfg(not(test))]
-use vanadium_sdk::{ux::{app_loading_stop, ux_validate, UxItem, UxAction}, glyphs::{ICON_EYE, ICON_VALIDATE, ICON_CROSSMARK}};
+use vanadium_sdk::{
+    glyphs::{ICON_CROSSMARK, ICON_EYE, ICON_VALIDATE},
+    ux::{app_loading_stop, ux_validate, UxAction, UxItem},
+};
 
 #[cfg(not(test))]
 use alloc::string::String;
@@ -52,7 +58,7 @@ pub fn ui_validate_wallet_policy(wallet_policy: &WalletPolicy) -> bool {
                 line2: Some(key),
                 action: UxAction::None,
             });
-        }    
+        }
 
         ux.extend([
             UxItem {
@@ -78,19 +84,22 @@ pub fn ui_validate_wallet_policy(wallet_policy: &WalletPolicy) -> bool {
     }
 }
 
-pub fn handle_register_wallet<'a>(req: RequestRegisterWallet) -> Result<ResponseRegisterWallet<'a>> {
+pub fn handle_register_wallet<'a>(
+    req: RequestRegisterWallet,
+) -> Result<ResponseRegisterWallet<'a>> {
     if !is_policy_name_acceptable(&req.name) {
         return Err(AppError::new("Invalid policy name"));
     }
 
-    let wallet_policy = match WalletPolicy::new(
-        req.name.into(), 
+    let wallet_policy = WalletPolicy::new(
+        req.name.into(),
         &req.descriptor_template.clone().into_owned(),
-        req.keys_info.iter().map(|s| s.as_ref()).collect::<Vec<&str>>()
-    ) {
-        Ok(w) => w,
-        Err(err) => return Err(AppError::new(&format!("Invalid wallet policy: {}", err))),
-    };
+        req.keys_info
+            .iter()
+            .map(|s| s.as_ref())
+            .collect::<Vec<&str>>(),
+    )
+    .map_err(|err| AppError::new(&format!("Invalid wallet policy: {}", err)))?;
 
     if !wallet_policy.is_acceptable() {
         return Err(AppError::new("Unacceptable or invalid policy"));
@@ -103,9 +112,9 @@ pub fn handle_register_wallet<'a>(req: RequestRegisterWallet) -> Result<Response
     let id = wallet_policy.id();
     let hmac = DUMMY_HMAC; // TODO: compute hmac using SLIP-21
 
-    Ok(ResponseRegisterWallet { 
+    Ok(ResponseRegisterWallet {
         wallet_id: Cow::Owned(id.into()),
-        wallet_hmac: Cow::Owned(hmac.into())
+        wallet_hmac: Cow::Owned(hmac.into()),
     })
 }
 
@@ -172,7 +181,7 @@ mod tests {
 
         // hmac 1f498e7444841b883c4a63e2b88a5cad297c289d235794f8e3e17cf559ed0654
         // id 763926f53be53ad89a9248dc15bc2f3ed577a59a87d81cd88f14279b263b31f6
-    
+
         assert_eq!(
             resp.unwrap().wallet_id.as_ref(),
             hex!("763926f53be53ad89a9248dc15bc2f3ed577a59a87d81cd88f14279b263b31f6"),

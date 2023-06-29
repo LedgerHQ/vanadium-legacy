@@ -1,13 +1,20 @@
 use alloc::borrow::Cow;
 use alloc::format;
 use alloc::vec::Vec;
-use vanadium_sdk::crypto::{EcfpPublicKey, CxCurve, derive_node_bip32};
+use vanadium_sdk::crypto::{derive_node_bip32, CxCurve, EcfpPublicKey};
 
-use crate::{message::message::{RequestGetExtendedPubkey, ResponseGetExtendedPubkey}, crypto::{get_key_fingerprint, get_compressed_pubkey, get_checksum}};
+use crate::{
+    crypto::{get_checksum, get_compressed_pubkey, get_key_fingerprint},
+    message::message::{RequestGetExtendedPubkey, ResponseGetExtendedPubkey},
+};
 
 use error::*;
 
-pub fn handle_get_extended_pubkey<'a>(req: RequestGetExtendedPubkey) -> Result<ResponseGetExtendedPubkey<'a>> {
+// TODO: implement UX to show derived address on screen
+
+pub fn handle_get_extended_pubkey<'a>(
+    req: RequestGetExtendedPubkey,
+) -> Result<ResponseGetExtendedPubkey<'a>> {
     if req.display {
         return Err(AppError::new("Not yet implemented")); // TODO
     }
@@ -21,12 +28,12 @@ pub fn handle_get_extended_pubkey<'a>(req: RequestGetExtendedPubkey) -> Result<R
         )));
     }
 
-
     let parent_fpr: u32 = if req.bip32_path.len() == 0 {
         0
     } else {
         let parent_path = &req.bip32_path[..req.bip32_path.len() - 1];
-        let parent_pubkey: EcfpPublicKey = EcfpPublicKey::from_path(CxCurve::Secp256k1, parent_path)?;
+        let parent_pubkey: EcfpPublicKey =
+            EcfpPublicKey::from_path(CxCurve::Secp256k1, parent_path)?;
         get_key_fingerprint(&parent_pubkey)
     };
 
@@ -36,7 +43,7 @@ pub fn handle_get_extended_pubkey<'a>(req: RequestGetExtendedPubkey) -> Result<R
         CxCurve::Secp256k1,
         &req.bip32_path,
         Some(&mut privkey_bytes),
-        Some(&mut chaincode)
+        Some(&mut chaincode),
     )?;
 
     // TODO: avoid double derivation; currently no way of getting chaincode and pubkey from the sdk
@@ -51,7 +58,9 @@ pub fn handle_get_extended_pubkey<'a>(req: RequestGetExtendedPubkey) -> Result<R
 
     // Depth
     if req.bip32_path.len() > 10 {
-        return Err(AppError::new("Too many derivation steps in bip32 path: the maximum is 10"));
+        return Err(AppError::new(
+            "Too many derivation steps in bip32 path: the maximum is 10",
+        ));
     }
     serialized_pubkey.push(req.bip32_path.len() as u8);
 
@@ -77,7 +86,6 @@ pub fn handle_get_extended_pubkey<'a>(req: RequestGetExtendedPubkey) -> Result<R
     })
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,11 +96,10 @@ mod tests {
     fn test_get_extended_pubkey() {
         let req = RequestGetExtendedPubkey {
             display: false,
-            bip32_path: vec![44+H, 1+H, 0+H]
+            bip32_path: vec![44 + H, 1 + H, 0 + H],
         };
 
         let resp = handle_get_extended_pubkey(req);
-
 
         assert_eq!(
             resp.unwrap().pubkey,
