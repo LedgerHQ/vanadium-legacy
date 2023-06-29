@@ -12,8 +12,6 @@
 #define INSTRUCTIONS_THRESHOLD 2000
 #define NUMBER_OF_ICONS        8
 
-#define ARRAYLEN(array) (sizeof(array) / sizeof(array[0]))
-
 #if (BAGL_WIDTH==128 && BAGL_HEIGHT==64)
 #define TEXT_Y 44
 #elif (BAGL_WIDTH==128 && BAGL_HEIGHT==32)

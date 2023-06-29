@@ -18,7 +18,7 @@ static bool running_on_speculos(void)
     return strcmp((char *)buffer, "Speculos") == 0;
 }
 
-static inline void err(char *msg)
+static inline void err(const char *msg)
 {
     if (!initialized) {
         on_speculos = running_on_speculos();
@@ -37,7 +37,7 @@ static inline void err(char *msg)
     );
 }
 
-static inline void fatal(char *msg)
+static inline void fatal(const char *msg)
 {
     err(msg);
     os_sched_exit(7);
@@ -46,12 +46,12 @@ static inline void fatal(char *msg)
 #include <stdio.h>
 #include <stdlib.h>
 
-static inline void err(char *msg)
+static inline void err(const char *msg)
 {
     fprintf(stderr, "%s", msg);
 }
 
-static inline void fatal(char *msg)
+static inline void fatal(const char *msg)
 {
     err(msg);
     exit(7);
