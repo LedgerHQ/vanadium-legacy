@@ -1,6 +1,11 @@
+use alloc::vec::Vec;
 
 use crate::{
-    ecall_hash_update, fatal, ecall::{ecall_hash_final, ecall_derive_node_bip32, ecall_cx_ecfp_generate_pair, ecall_get_random_bytes, ecall_ecdsa_verify, ecall_get_master_fingerprint}, SdkError
+    ecall::{
+        ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32, ecall_ecdsa_sign, ecall_ecdsa_verify,
+        ecall_get_master_fingerprint, ecall_get_random_bytes, ecall_hash_final,
+    },
+    ecall_hash_update, fatal, SdkError,
 };
 
 #[repr(C)]
@@ -64,6 +69,26 @@ pub enum CxHashId {
     HashIdSha3_256,
     HashIdSha256,
 }
+
+#[repr(C)]
+pub enum CxMd {
+    None = 0,
+    RipeMd160 = 1,
+    Sha224 = 2,
+    Sha256 = 3,
+    Sha384 = 4,
+    Sha512 = 5,
+    Keccak = 6,
+    Sha3 = 7,
+    Groestl = 8,
+    Blake2b = 9,
+    Shake128 = 10,
+    Shake256 = 11,
+    Sha3_256 = 12,
+    Sha3_512 = 13,
+}
+
+pub const CX_RND_RFC6979: i32 = 3 << 9;
 
 impl CtxSha256 {
     pub fn new() -> Self {
@@ -246,6 +271,14 @@ impl EcfpPublicKey {
         &self.w
     }
 
+    pub fn to_compressed(&self) -> [u8; 33] {
+        let mut compressed_pubkey: [u8; 33] = [0; 33];
+        compressed_pubkey[0] = if self.w[64] % 2 == 0 { 0x02 } else { 0x03 };
+        compressed_pubkey[1..].copy_from_slice(&self.w[1..33]);
+
+        compressed_pubkey
+    }
+
     pub fn verify(&self, hash: &[u8; 32], sig: &[u8]) -> Result<(), SdkError> {
         if !unsafe { ecall_ecdsa_verify(self, hash.as_ptr(), sig.as_ptr(), sig.len()) } {
             Err(SdkError::SignatureVerification)
@@ -280,12 +313,54 @@ impl EcfpPrivateKey {
         derive_node_bip32(curve, path, Some(&mut privkey.d), None)?;
         Ok(privkey)
     }
+
+    pub fn pubkey(&self) -> Result<EcfpPublicKey, SdkError> {
+        let mut privkey = Self {
+            curve: self.curve,
+            d_len: self.d_len,
+            d: self.d,
+        };
+        let mut pubkey = EcfpPublicKey {
+            curve: self.curve,
+            w_len: 65,
+            w: [0u8; 65],
+        };
+        ecfp_generate_keypair(self.curve, &mut pubkey, &mut privkey, true)?;
+        Ok(pubkey)
+    }
+
+    // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?
+    pub fn sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<Vec<u8>, SdkError> {
+        let mut sig = [0u8; 80];
+        let sig_len: usize;
+
+        if !unsafe {
+            let mut parity: i32 = 0;
+            sig_len = ecall_ecdsa_sign(
+                self,
+                mode,
+                hash_id,
+                hash.as_ptr(),
+                sig.as_mut_ptr(),
+                80,
+                &mut parity,
+            );
+
+            // TODO: is there any error condition to test?
+
+            true
+        } {
+            Err(SdkError::Signature)
+        } else {
+            Ok(sig[0..sig_len].to_vec())
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use hex_literal::hex;
     use super::*;
+    use hex_literal::hex;
 
     #[test]
     fn test_ripemd160() {
@@ -327,5 +402,23 @@ mod tests {
             CtxSha3::new().update(data).r#final(),
             hex!("72f15d6555488541650ce62c0bed7abd61247635c1973eb38474a2516ed1d884")
         );
+    }
+
+    // TODO: add more tests for ecdsa; probably, move ecdsa to a submodule
+    #[test]
+    fn test_ecdsa_sign_verify() {
+        let key_raw = [42u8; 32];
+        let mut privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &key_raw);
+        let mut pubkey = EcfpPublicKey::new(CxCurve::Secp256k1, &[0u8; 65]);
+        ecfp_generate_keypair(CxCurve::Secp256k1, &mut pubkey, &mut privkey, true).unwrap();
+
+        let msg = "If you don't believe me or don't get it, I don't have time to try to convince you, sorry.";
+        let msg_hash = CtxSha256::new().update(msg.as_bytes()).r#final();
+
+        let sig = privkey
+            .sign(CX_RND_RFC6979, CxMd::Sha256, &msg_hash)
+            .unwrap();
+
+        assert_eq!(pubkey.verify(&msg_hash, &sig).is_ok(), true)
     }
 }

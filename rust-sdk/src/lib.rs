@@ -23,6 +23,7 @@ static ALLOCATOR: allocator::CAlloc = allocator::CAlloc;
 pub enum SdkError {
     KeyGeneration,
     PathDerivation,
+    Signature,
     SignatureVerification,
 }
 
@@ -31,6 +32,7 @@ impl fmt::Display for SdkError {
         match self {
             SdkError::KeyGeneration => write!(f, "key generation"),
             SdkError::PathDerivation => write!(f, "path derivation"),
+            SdkError::Signature => write!(f, "signature"),
             SdkError::SignatureVerification => write!(f, "signature verification"),
         }
     }

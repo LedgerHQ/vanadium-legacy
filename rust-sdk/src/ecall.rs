@@ -1,4 +1,4 @@
-use crate::crypto::{CtxHashGuest, CxCurve, CxHashId, EcfpPrivateKey, EcfpPublicKey};
+use crate::crypto::{CtxHashGuest, CxCurve, CxHashId, CxMd, EcfpPrivateKey, EcfpPublicKey};
 use crate::ux::BaglComponent;
 
 extern "C" {
@@ -40,6 +40,14 @@ extern "C" {
         privkey_data: *mut u8,
         chain_code: *mut u8,
     ) -> bool;
+    pub fn ecall_ecdsa_sign(
+        key: &EcfpPrivateKey,
+        mode: i32,
+        hash_id: CxMd,
+        hash: *const u8,
+        sig: *mut u8,
+        sig_len: usize,
+        parity: *mut i32) -> usize;
     pub fn ecall_ecdsa_verify(
         key: &EcfpPublicKey,
         hash: *const u8,
