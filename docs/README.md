@@ -1,5 +1,7 @@
 ## Internals
 
+Note: some of the documents in this folder might be outdated.
+
 Big picture and concepts of the streaming idea:
 
 - [Encryption Overview](encryption-overview.md)

@@ -26,10 +26,12 @@ For end-users, it means that there's no restrictions on the number of apps since
 
 A few apps are available in the [app/](app/) folder:
 
-- [app-rust/](app-rust/): also implements some features of the Exchange app, in Rust.
-- A [Rust SDK](rust-sdk/) is available.
+- [app-rust](app/app-rust/): the first demo app written in Rust; implements some features of the Exchange app.
+- [app-bitcoin](app/app-bitcoin/): a clone of the Ledger bitcoin app.
 
 The Nano RISC-V VM app is in [vm/](vm/) and Python tools to interact with the VM app are in [host/](host/).
+
+The [Vanadium Rust SDK](rust-sdk) is used by all the Rust apps, providing an interface to the _ecalls_ that allow access to privileged calls from the emulated apps. It is linked together with the [C SDK](c-sdk).
 
 Once the project will be adopted more broadly, it will be split into several repositories. Meanwhile, it's more convenient to work on a mono-repo.
 
@@ -40,7 +42,7 @@ Once the project will be adopted more broadly, it will be split into several rep
 
 ### Documentation
 
-Technical and usage information can be found in the [docs/](docs/) folder.
+Technical and usage information can be found in the [docs/](docs/) folder, and in the various subfolders of the project.
 
 
 ### Licensing
