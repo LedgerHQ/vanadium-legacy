@@ -2,6 +2,6 @@
 
 set -e
 
-speculos.py --sdk 1.0.3 --model nanosp ../../vm/bin/app.elf &
+speculos.py ../../vm/bin/app.elf &
 
-sleep .5; ../../host/stream.py --speculos --app ./target/riscv32i-unknown-none-elf/release/app-bitcoin
+sleep .5; PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python ./client_py/bitcoin.py --speculos --app ./target/riscv32i-unknown-none-elf/release/app-bitcoin "$@"
