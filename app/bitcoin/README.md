@@ -48,3 +48,12 @@ They are also generated as artifacts by the [GitHub CI](https://github.com/Ledge
 ### Pre-requisites (bitcoin)
 
 The app requires patched versions of the [rust-bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) and [rust-secp256k1](https://github.com/rust-bitcoin/rust-secp256k1). The `prepare_dependencies.sh` script downloads the latest version of the libraries and applies the required patches.
+
+
+## Running native unit tests
+
+Make sure to not run tests in parallel, for example:
+
+```
+cargo test -- --test-threads=1
+```
