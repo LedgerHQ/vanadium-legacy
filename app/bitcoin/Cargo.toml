@@ -1,10 +1,10 @@
 [package]
-name = "app-bitcoin"
+name = "vnd-bitcoin"
 version = "0.1.0"
 authors = ["Salvatore Ingala"]
 
 [[bin]]
-name = "app-bitcoin"
+name = "vnd-bitcoin"
 path = "src/main.rs"
 
 [dependencies]

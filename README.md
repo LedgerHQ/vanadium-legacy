@@ -26,8 +26,8 @@ For end-users, it means that there's no restrictions on the number of apps since
 
 A few apps are available in the [app/](app/) folder:
 
-- [app-rust](app/app-rust/): the first demo app written in Rust; implements some features of the Exchange app.
-- [app-bitcoin](app/app-bitcoin/): a clone of the Ledger bitcoin app.
+- [rust](app/rust/): the first demo app written in Rust; implements some features of the Exchange app.
+- [bitcoin](app/bitcoin/): a clone of the Ledger bitcoin app.
 
 The Nano RISC-V VM app is in [vm/](vm/) and Python tools to interact with the VM app are in [host/](host/).
 
