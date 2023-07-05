@@ -743,6 +743,14 @@ pub struct WalletPolicy {
     key_information_raw: Vec<String>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum SegwitVersion {
+    Legacy,
+    SegwitV0,
+    Taproot,
+    Unknown,
+}
+
 impl WalletPolicy {
     pub fn new(
         name: String,
@@ -820,6 +828,20 @@ impl WalletPolicy {
 
     pub fn id(&self) -> [u8; 32] {
         CtxSha256::new().update(&self.serialize()).r#final()
+    }
+
+    pub fn get_segwit_version(&self) -> Result<SegwitVersion, &'static str> {
+        match &self.descriptor_template {
+            DescriptorTemplate::Tr(_, _) => Ok(SegwitVersion::Taproot),
+            DescriptorTemplate::Wpkh(_) | DescriptorTemplate::Wsh(_) => Ok(SegwitVersion::SegwitV0),
+            DescriptorTemplate::Sh(inner) => {
+                match inner.as_ref() {
+                    DescriptorTemplate::Wpkh(_) | DescriptorTemplate::Wsh(_) => Ok(SegwitVersion::SegwitV0),
+                    _ => Ok(SegwitVersion::Legacy),
+                }
+            }
+            _ => Err("Invalid top-level policy"),
+        }
     }
 }
 

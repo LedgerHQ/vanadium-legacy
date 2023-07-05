@@ -1,12 +1,10 @@
-use core::str::FromStr;
-
 use alloc::{borrow::Cow, format, vec, vec::Vec};
 use subtle::ConstantTimeEq;
 use vanadium_sdk::crypto::{CxCurve, CxMd, EcfpPrivateKey, CX_RND_RFC6979};
 
 use crate::{
     message::message::{PartialSignature, RequestSignPsbt, ResponseSignPsbt},
-    wallet::{self, DescriptorTemplate, WalletPolicy},
+    wallet::{WalletPolicy, SegwitVersion, KeyOrigin, KeyPlaceholder},
 };
 
 #[cfg(not(test))]
@@ -15,7 +13,7 @@ use vanadium_sdk::{
     ux::{app_loading_stop, ux_validate, UxAction, UxItem},
 };
 
-use bitcoin::{psbt::PartiallySignedTransaction, sighash::SighashCache};
+use bitcoin::{psbt::{PartiallySignedTransaction}, sighash::SighashCache, ScriptBuf, bip32::{Fingerprint, DerivationPath}, Transaction};
 
 #[cfg(not(test))]
 use alloc::string::String;
@@ -61,6 +59,59 @@ pub fn ui_authorize_wallet_policy_spend(wallet_policy: &WalletPolicy) -> bool {
 
         ux_validate(&ux)
     }
+}
+
+
+fn sign_transaction_ecdsa<'a>(psbt: &PartiallySignedTransaction, input_index: usize, sighash_cache: &mut SighashCache<Transaction>, path: &[u32]) -> Result<PartialSignature<'a>> {
+    let (sighash, sighash_type) = psbt
+        .sighash_ecdsa(input_index, sighash_cache)
+        .map_err(|_| AppError::new("Error computing sighash"))?;
+
+    let privkey = EcfpPrivateKey::from_path(CxCurve::Secp256k1, path)?;
+    let pubkey = privkey.pubkey()?;
+
+    let mut signature = privkey.sign(CX_RND_RFC6979, CxMd::Sha256, sighash.as_ref())?;
+    signature.push(sighash_type.to_u32() as u8);
+
+    Ok(PartialSignature {
+        signature: Cow::Owned(signature),
+        public_key: Cow::Owned(pubkey.to_compressed().to_vec()),
+        leaf_hash: Cow::Owned(vec![]),
+    })
+}
+
+fn find_change_and_addr_index(psbt: &PartiallySignedTransaction, wallet_policy: &WalletPolicy, placeholder: &KeyPlaceholder, key_origin: &KeyOrigin, master_fpr: u32) -> Option<(bool, u32)> {
+    for input in psbt.inputs.iter() {
+        let keys_and_origins: Vec<&(Fingerprint, DerivationPath)> = if wallet_policy.get_segwit_version() == Ok(SegwitVersion::Taproot) {
+            input.tap_key_origins.iter().map(|(_, (_, x))| x).collect()
+        } else {
+            input.bip32_derivation.iter().map(|(_, x)| x).collect()
+        };
+
+        for (fpr, der) in keys_and_origins {
+            let fpr = u32::from_be_bytes(*fpr.as_bytes());
+            let der: Vec<u32> = der.into_iter().map(|x| u32::from(*x)).collect();
+
+            if fpr == master_fpr {
+                // TODO: should rederive the key and check if the key actually matches
+
+                // check if it matches
+                let orig_len = key_origin.derivation_path.len();
+                if der.len() == orig_len + 2 && key_origin.derivation_path == der[..orig_len] {
+                    let change_step = der[orig_len];
+                    let addr_index = der[orig_len + 1];
+
+                    if placeholder.num1 == change_step {
+                        return Some((false, addr_index));
+                    } else if placeholder.num2 == change_step {
+                        return Some((true, addr_index));
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>> {
@@ -109,54 +160,48 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
     let master_fingerprint = vanadium_sdk::crypto::get_master_fingerprint()?;
 
     for placeholder in wallet_policy.descriptor_template.placeholders() {
-        // todo: check if key is internal
-        // for now we just trust the fingerprint
+        // TODO: check if key is internal; for now we just trust the fingerprint
+
         let key_info = wallet_policy.key_information[placeholder.key_index as usize].clone();
-        if key_info
-            .origin_info
-            .as_ref()
-            .map(|x| x.fingerprint == master_fingerprint)
-            .unwrap_or(false)
-        {
-            let mut path = key_info.origin_info.unwrap().derivation_path;
-
-            // todo: figure out if this input is change
-            let is_change = false;
-            let addr_index = 0;
-
-            path.push(if !is_change {
-                placeholder.num1
-            } else {
-                placeholder.num2
-            });
-            path.push(addr_index);
-
-            for (input_index, input) in psbt.inputs.iter().enumerate() {
-                if input.witness_utxo.is_none() {
-                    // sign as legacy p2pkh or p2sh
-                    let (sighash, sighash_type) = psbt
-                        .sighash_ecdsa(input_index, &mut sighash_cache)
-                        .map_err(|_| AppError::new("Error computing sighash"))?;
-
-                    let privkey = EcfpPrivateKey::from_path(CxCurve::Secp256k1, &path)?;
-                    let pubkey = privkey.pubkey()?;
-
-                    let mut signature =
-                        privkey.sign(CX_RND_RFC6979, CxMd::Sha256, sighash.as_ref())?;
-                    signature.push(sighash_type.to_u32() as u8);
-
-                    partial_signatures.push(PartialSignature {
-                        signature: Cow::Owned(signature),
-                        public_key: Cow::Owned(pubkey.to_compressed().to_vec()),
-                        leaf_hash: Cow::Owned(vec![]),
-                    });
+        if let Some(key_origin) = key_info.origin_info.as_ref().filter(|x| x.fingerprint == master_fingerprint) {
+            // for each input, verify if we can match the derivation with the current placeholder
+            if let Some((is_change, addr_index)) = find_change_and_addr_index(&psbt, &wallet_policy, &placeholder, &key_origin, master_fingerprint) {
+    
+                let mut path = key_info.origin_info.unwrap().derivation_path;
+    
+                path.push(if !is_change {
+                    placeholder.num1
                 } else {
-                    // sign all segwit types (including wrapped)
-                    let script = if input.redeem_script.is_some() {
-                        todo!()
+                    placeholder.num2
+                });
+                path.push(addr_index);
+    
+                for (input_index, input) in psbt.inputs.iter().enumerate() {
+                    if let Some(witness_utxo) = &input.witness_utxo {
+                        // sign all segwit types (including wrapped)
+                        if let Some(redeem_script) = &input.redeem_script {
+                            // check that P2WSH(redeem_script) == witness_utxo.script_pubkey
+                            if witness_utxo.script_pubkey != ScriptBuf::new_p2sh(&redeem_script.script_hash()) {
+                                return Err(AppError::new("witnessUtxo's scriptPubKey does not match redeemScript"));
+                            }
+                        }
+    
+                        match wallet_policy.get_segwit_version() {
+                            Ok(SegwitVersion::SegwitV0) => {
+                                // sign as segwit v0
+                                let partial_signature = sign_transaction_ecdsa(&psbt, input_index, &mut sighash_cache, &path)?;
+                                partial_signatures.push(partial_signature);
+                            },
+                            Ok(SegwitVersion::Taproot) => {
+                                todo!()
+                            },
+                            _ => return Err(AppError::new("Unexpected state: should be SegwitV0 or Taproot")),
+                        }
                     } else {
-                        todo!()
-                    };
+                        // sign as legacy p2pkh or p2sh
+                        let partial_signature = sign_transaction_ecdsa(&psbt, input_index, &mut sighash_cache, &path)?;
+                        partial_signatures.push(partial_signature);
+                    }
                 }
             }
         }
@@ -173,7 +218,7 @@ mod tests {
     use hex_literal::hex;
 
     #[test]
-    fn test_sign_psbt() {
+    fn test_sign_psbt_singlesig_pkh_1to1() {
         let psbt_b64 = "cHNidP8BAFUCAAAAAVEiws3mgj5VdUF1uSycV6Co4ayDw44Xh/06H/M0jpUTAQAAAAD9////AXhBDwAAAAAAGXapFBPX1YFmlGw+wCKTQGbYwNER0btBiKwaBB0AAAEA+QIAAAAAAQHsIw5TCVJWBSokKCcO7ASYlEsQ9vHFePQxwj0AmLSuWgEAAAAXFgAUKBU5gg4t6XOuQbpgBLQxySHE2G3+////AnJydQAAAAAAF6kUyLkGrymMcOYDoow+/C+uGearKA+HQEIPAAAAAAAZdqkUy65bUM+Tnm9TG4prer14j+FLApeIrAJHMEQCIDfstCSDYar9T4wR5wXw+npfvc1ZUXL81WQ/OxG+/11AAiACDG0yb2w31jzsra9OszX67ffETgX17x0raBQLAjvRPQEhA9rIL8Cs/Pw2NI1KSKRvAc6nfyuezj+MO0yZ0LCy+ZXShPIcACIGAu6GCCB+IQKEJvaedkR9fj1eB3BJ9eaDwxNsIxR2KkcYGPWswv0sAACAAQAAgAAAAIAAAAAAAAAAAAAA";
         let psbt = general_purpose::STANDARD_NO_PAD.decode(psbt_b64).unwrap();
 
@@ -197,4 +242,32 @@ mod tests {
             hex!("3045022100e55b3ca788721aae8def2eadff710e524ffe8c9dec1764fdaa89584f9726e196022012a30fbcf9e1a24df31a1010356b794ab8de438b4250684757ed5772402540f401")
         );
     }
+
+    #[test]
+    fn test_sign_psbt_singlesig_sh_wpkh_1to2() {
+        let psbt_b64 = "cHNidP8BAHICAAAAAXT0yaTajRSLu1boaayjaQ3aDOOsvPgWCcyUbRtvFkrOAQAAAAD9////AlDUEgAAAAAAFgAUMxjgT65sEq/LAJxpzVflslBK5rT1cQgAAAAAABepFG1IUtrzpUCfdyFtu46j1ZIxLX7phwAAAAAAAQCMAgAAAAHQ47WR3EhO23HqtmoOmUcxAH/rfQgqUMdC8CPqCQFNHgEAAAAXFgAU4xDQRPiNqxtCdp5KhMrwg2P57MH9////AmDqAAAAAAAAGXapFEWIHtDTWHVQ95SEe3yLn6A+3Qo8iKx/ZhsAAAAAABepFPBGTZ+g6kLYDk1fFFeIOYLiO47shwAAAAABASB/ZhsAAAAAABepFPBGTZ+g6kLYDk1fFFeIOYLiO47shwEEFgAUyweAh+/0haqiJg6UpT19bRxd0VEiBgJLo7d9kz3p+j+VgzSMQPPKry7/rVtuJE7Oirv8xyRPZxj1rML9MQAAgAEAAIAAAACAAQAAAAAAAAAAAAEAFgAUTLRHxTu3NSNPKxOQ1F2dhksVdtMiAgOKsR70a0i1XwDFPv3fOM3f+dYzW8r1L6n5k4R/LM0vVxj1rML9MQAAgAEAAIAAAACAAQAAAAIAAAAA";
+        let psbt = general_purpose::STANDARD_NO_PAD.decode(psbt_b64).unwrap();
+
+        let req = RequestSignPsbt {
+            psbt: Cow::Owned(psbt),
+            name: "".into(),
+            descriptor_template: "sh(wpkh(@0/**))".into(),
+            keys_info: vec!["[f5acc2fd/49'/1'/0']tpubDC871vGLAiKPcwAw22EjhKVLk5L98UGXBEcGR8gpcigLQVDDfgcYW24QBEyTHTSFEjgJgbaHU8CdRi9vmG4cPm1kPLmZhJEP17FMBdNheh3".into()],
+            wallet_hmac: Cow::Owned([0u8; 32].into()),
+        };
+
+        let resp = handle_sign_psbt(req).unwrap();
+
+        assert_eq!(1, resp.partial_signatures.len());
+        assert_eq!(
+            resp.partial_signatures[0].public_key.as_ref(),
+            hex!("024ba3b77d933de9fa3f9583348c40f3caaf2effad5b6e244ece8abbfcc7244f67")
+        );
+        assert_eq!(
+            resp.partial_signatures[0].signature.as_ref(),
+            hex!("30440220720722b08489c2a50d10edea8e21880086c8e8f22889a16815e306daeea4665b02203fcf453fa490b76cf4f929714065fc90a519b7b97ab18914f9451b5a4b45241201")
+        );
+    }
+
+
 }
