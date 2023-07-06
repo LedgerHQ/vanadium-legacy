@@ -115,21 +115,6 @@ fn find_change_and_addr_index(psbt: &PartiallySignedTransaction, wallet_policy: 
 }
 
 pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>> {
-    // compare the hmac to 0 in constant time
-    let mut hmac_or: u8 = 0;
-    for &byte in req.wallet_hmac.iter() {
-        hmac_or |= byte;
-    }
-
-    let is_wallet_canonical = hmac_or == 0;
-    if !is_wallet_canonical {
-        // verify hmac
-        // IMPORTANT: we use a constant time comparison
-        if req.wallet_hmac.ct_eq(&DUMMY_HMAC).unwrap_u8() == 0 {
-            return Err(AppError::new("Invalid hmac"));
-        }
-    }
-
     let wallet_policy = WalletPolicy::new(
         req.name.into(),
         &req.descriptor_template.clone().into_owned(),
@@ -140,9 +125,27 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
     )
     .map_err(|err| AppError::new(&format!("Invalid wallet policy: {}", err)))?;
 
-    if is_wallet_canonical {
-        // TODO: check that the policy is indeed canonical
+    // compare the hmac to 0 in constant time
+    let mut hmac_or: u8 = 0;
+    for &byte in req.wallet_hmac.iter() {
+        hmac_or |= byte;
     }
+
+    let is_wallet_default = hmac_or == 0;
+    if is_wallet_default {
+        // check that the wallet is indeed canonical
+        if !wallet_policy.is_default() {
+            return Err(AppError::new("Non-standard policy needs a valid HMAC"));
+        }
+        // TODO: should still check that we can derive the same pubkey using the key origin
+    } else {
+        // verify hmac
+        // IMPORTANT: we use a constant time comparison
+        if req.wallet_hmac.ct_eq(&DUMMY_HMAC).unwrap_u8() == 0 {
+            return Err(AppError::new("Invalid hmac"));
+        }
+    }
+
 
     // steps:
 

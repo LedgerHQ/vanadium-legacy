@@ -17,6 +17,7 @@ extern crate core;
 #[cfg(test)]
 extern crate base64;
 
+mod constants;
 mod crypto;
 mod error;
 mod handlers;

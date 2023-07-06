@@ -30,6 +30,7 @@ use bitcoin::consensus::encode::{self, VarInt};
 use vanadium_sdk::crypto::CtxSha256;
 
 use super::merkle::MerkleTree;
+use crate::constants::{BIP44_COIN_TYPE, MAX_BIP44_ACCOUNT_RECOMMENDED};
 
 const HARDENED_INDEX: u32 = 0x80000000u32;
 
@@ -748,7 +749,6 @@ pub enum SegwitVersion {
     Legacy,
     SegwitV0,
     Taproot,
-    Unknown,
 }
 
 impl WalletPolicy {
@@ -834,13 +834,73 @@ impl WalletPolicy {
         match &self.descriptor_template {
             DescriptorTemplate::Tr(_, _) => Ok(SegwitVersion::Taproot),
             DescriptorTemplate::Wpkh(_) | DescriptorTemplate::Wsh(_) => Ok(SegwitVersion::SegwitV0),
-            DescriptorTemplate::Sh(inner) => {
-                match inner.as_ref() {
-                    DescriptorTemplate::Wpkh(_) | DescriptorTemplate::Wsh(_) => Ok(SegwitVersion::SegwitV0),
-                    _ => Ok(SegwitVersion::Legacy),
+            DescriptorTemplate::Sh(inner) => match inner.as_ref() {
+                DescriptorTemplate::Wpkh(_) | DescriptorTemplate::Wsh(_) => {
+                    Ok(SegwitVersion::SegwitV0)
                 }
-            }
+                _ => Ok(SegwitVersion::Legacy),
+            },
             _ => Err("Invalid top-level policy"),
+        }
+    }
+
+    /// Checks whether this policy is a single-sig policy where both the descriptor and the
+    /// single key path (which must be present) is according to BIP-44, BIP-49, BIP-84, or
+    /// BIP-86 specifications.
+    /// Default policies are the ones that can be used without registering them first.
+    ///
+    /// Note that this does not verify that the xpub is indeed derived as claimed; the
+    /// responsibility for this check is on the caller.
+    pub fn is_default(&self) -> bool {
+        if self.key_information.len() != 1 || !self.name.is_empty() {
+            return false;
+        }
+
+        let key_origin = match &self.key_information[0].origin_info {
+            Some(ko) => ko,
+            None => return false,
+        };
+
+        if key_origin.derivation_path.len() != 3 {
+            return false;
+        }
+
+        // checks if a key placeholder is canonical
+        fn check_kp(kp: &KeyPlaceholder) -> bool {
+            kp.key_index == 0 && kp.num1 == 0 && kp.num2 == 1
+        }
+
+        // checks if a derivation path is canonical according to the BIP-44 purpose
+        fn check_path(der_path: &[u32], purpose: u32) -> bool {
+            const H: u32 = 0x80000000u32;
+
+            der_path.len() == 3
+                && der_path[..2] == vec![H + purpose, H + BIP44_COIN_TYPE]
+                && der_path[2] >= H
+                && der_path[2] <= H + MAX_BIP44_ACCOUNT_RECOMMENDED
+        }
+
+        match &self.descriptor_template {
+            DescriptorTemplate::Pkh(kp) => {
+                // BIP-44
+                check_kp(kp) && check_path(&key_origin.derivation_path, 44)
+            }
+            DescriptorTemplate::Wpkh(kp) => {
+                // BIP-84
+                check_kp(kp) && check_path(&key_origin.derivation_path, 84)
+            }
+            DescriptorTemplate::Sh(inner) => match inner.as_ref() {
+                DescriptorTemplate::Wpkh(kp) => {
+                    // BIP-49
+                    check_kp(kp) && check_path(&key_origin.derivation_path, 49)
+                }
+                _ => false,
+            },
+            DescriptorTemplate::Tr(kp, tree) => {
+                // BIP-86
+                tree.is_none() && check_kp(kp) && check_path(&key_origin.derivation_path, 86)
+            }
+            _ => false,
         }
     }
 }
@@ -1357,6 +1417,157 @@ mod tests {
         );
 
         assert!(wallet.is_ok());
+    }
+
+    #[test]
+    fn test_wallet_policy_is_default() {
+        let valid_combos: Vec<(&str, u32)> = vec![
+            ("pkh(@0/**)", 44),
+            ("sh(wpkh(@0/**))", 49),
+            ("wpkh(@0/**)", 84),
+            ("tr(@0/**)", 86),
+        ];
+
+        // we re-use the same dummy tpub for all tests - it's not checked anyway
+        let dummy_key = "tpubDCtKfsNyRhULjZ9XMS4VKKtVcPdVDi8MKUbcSD9MJDyjRu1A2ND5MiipozyyspBT9bg8upEp7a8EAgFxNxXn1d7QkdbL52Ty5jiSLcxPt1P";
+
+        for (desc_tmp, purpose) in &valid_combos {
+            // test valid cases
+            for account in [0, 1, 50, MAX_BIP44_ACCOUNT_RECOMMENDED] {
+                assert_eq!(
+                    WalletPolicy::new(
+                        "".into(),
+                        desc_tmp,
+                        vec![&format!(
+                            "[f5acc2fd/{}'/{}'/{}']{}",
+                            purpose, BIP44_COIN_TYPE, account, dummy_key
+                        )]
+                    )
+                    .unwrap()
+                    .is_default(),
+                    true
+                );
+            }
+
+            // test invalid purposes (using the "purpose" from the wrong BIP)
+            for (_, invalid_purpose) in valid_combos.iter().filter(|(_, p)| p != purpose) {
+                assert_eq!(
+                    WalletPolicy::new(
+                        "".into(),
+                        desc_tmp,
+                        vec![&format!(
+                            "[f5acc2fd/{}'/{}'/{}']{}",
+                            invalid_purpose, BIP44_COIN_TYPE, 0, dummy_key
+                        )]
+                    )
+                    .unwrap()
+                    .is_default(),
+                    false
+                );
+            }
+
+            // test account too large
+            assert_eq!(
+                WalletPolicy::new(
+                    "".into(),
+                    desc_tmp,
+                    vec![&format!(
+                        "[f5acc2fd/{}'/{}'/{}']{}",
+                        purpose,
+                        BIP44_COIN_TYPE,
+                        MAX_BIP44_ACCOUNT_RECOMMENDED + 1,
+                        dummy_key
+                    )]
+                )
+                .unwrap()
+                .is_default(),
+                false
+            );
+
+            // test unhardened purpose
+            assert_eq!(
+                WalletPolicy::new(
+                    "".into(),
+                    desc_tmp,
+                    vec![&format!(
+                        "[f5acc2fd/{}/{}'/{}']{}",
+                        44, BIP44_COIN_TYPE, 0, dummy_key
+                    )]
+                )
+                .unwrap()
+                .is_default(),
+                false
+            );
+
+            // test unhardened coin_type
+            assert_eq!(
+                WalletPolicy::new(
+                    "".into(),
+                    desc_tmp,
+                    vec![&format!(
+                        "[f5acc2fd/{}'/{}/{}']{}",
+                        44, BIP44_COIN_TYPE, 0, dummy_key
+                    )]
+                )
+                .unwrap()
+                .is_default(),
+                false
+            );
+
+            // test unhardened account
+            assert_eq!(
+                WalletPolicy::new(
+                    "".into(),
+                    desc_tmp,
+                    vec![&format!(
+                        "[f5acc2fd/{}'/{}/{}']{}",
+                        44, BIP44_COIN_TYPE, 0, dummy_key
+                    )]
+                )
+                .unwrap()
+                .is_default(),
+                false
+            );
+
+            // test missing key origin
+            assert_eq!(
+                WalletPolicy::new("".into(), desc_tmp, vec![&dummy_key])
+                    .unwrap()
+                    .is_default(),
+                false
+            );
+        }
+
+        // test non-empty name
+        assert_eq!(
+            WalletPolicy::new(
+                "standard policy have empty name".into(),
+                "pkh(@0/**)",
+                vec![&format!(
+                    "[f5acc2fd/44'/{}'/{}']{}",
+                    BIP44_COIN_TYPE, 0, dummy_key
+                )]
+            )
+            .unwrap()
+            .is_default(),
+            false
+        );
+
+        // tr with non-empty script is not standard
+        assert_eq!(
+            WalletPolicy::new(
+                "".into(),
+                "tr(@0/**,0)",
+                vec![&format!(
+                    "[f5acc2fd/86'/{}'/{}']{}",
+                    BIP44_COIN_TYPE, 0, dummy_key
+                )]
+            )
+            .unwrap()
+            .is_default(),
+            false
+        );
+
     }
 
     #[test]
