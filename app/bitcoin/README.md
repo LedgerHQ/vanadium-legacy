@@ -15,8 +15,6 @@ From the root folder of the app:
 $ ./prepare-depencencies.sh
 ```
 
-If the last command fails, the [/patches](./patches) might need to be updated.
-
 Then, for native execution:
 
 ```console
@@ -47,7 +45,7 @@ They are also generated as artifacts by the [GitHub CI](https://github.com/Ledge
 
 ### Pre-requisites (bitcoin)
 
-The app requires patched versions of the [rust-bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) and [rust-secp256k1](https://github.com/rust-bitcoin/rust-secp256k1). The `prepare_dependencies.sh` script downloads the latest version of the libraries and applies the required patches.
+The app requires patched versions of the [rust-bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) and [rust-secp256k1](https://github.com/rust-bitcoin/rust-secp256k1). The `prepare_dependencies.sh` downloads the patched libraries from https://github.com/LedgerHQ/vanadium-rust-bitcoin and https://github.com/LedgerHQ/vanadium-rust-secp256k1, respectively.
 
 
 ## Running native unit tests
