@@ -11,6 +11,7 @@ union cx_hash_ctx_u {
     cx_ripemd160_t ripemd160;
     cx_sha256_t sha256;
     cx_sha3_t sha3;
+    cx_sha512_t sha512;
     cx_hash_t header;
 };
 
@@ -69,6 +70,22 @@ static bool restore_ctx_from_guest(eret_t *eret, const cx_hash_id_t hash_id, gue
             memcpy(&ctx->sha256.acc, guest.sha256.acc, sizeof(ctx->sha256.acc));
         }
         break;
+    case HASH_ID_SHA512:
+        if (!copy_guest_buffer(p_ctx, &guest.sha512, sizeof(guest.sha512))) {
+            return false;
+        }
+        cx_sha512_init_no_throw(&ctx->sha512);
+        if (guest.sha512.initialized) {
+            if (guest.sha512.blen > sizeof(ctx->sha512.block)) {
+                eret->success = false;
+                break;
+            }
+            ctx->sha512.header.counter = guest.sha512.counter;
+            ctx->sha512.blen = guest.sha512.blen;
+            memcpy(&ctx->sha512.block, guest.sha512.block, sizeof(ctx->sha512.block));
+            memcpy(&ctx->sha512.acc, guest.sha512.acc, sizeof(ctx->sha512.acc));
+        }
+        break;
     default:
         eret->success = false;
         break;
@@ -111,6 +128,16 @@ static bool save_ctx_from_host(eret_t *eret, const cx_hash_id_t hash_id, guest_p
         memcpy(guest.sha256.block, &ctx->sha256.block, sizeof(ctx->sha256.block));
         memcpy(guest.sha256.acc, &ctx->sha256.acc, sizeof(ctx->sha256.acc));
         if (!copy_host_buffer(p_ctx, &guest.sha256, sizeof(guest.sha256))) {
+            return false;
+        }
+        break;
+    case HASH_ID_SHA512:
+        guest.sha512.initialized = true;
+        guest.sha512.counter = ctx->sha512.header.counter;
+        guest.sha512.blen = ctx->sha512.blen;
+        memcpy(guest.sha512.block, &ctx->sha512.block, sizeof(ctx->sha512.block));
+        memcpy(guest.sha512.acc, &ctx->sha512.acc, sizeof(ctx->sha512.acc));
+        if (!copy_host_buffer(p_ctx, &guest.sha512, sizeof(guest.sha512))) {
             return false;
         }
         break;
@@ -172,6 +199,7 @@ bool sys_hash_final(eret_t *eret, const cx_hash_id_t hash_id, guest_pointer_t p_
     case HASH_ID_RIPEMD160: hash_len = CX_RIPEMD160_SIZE; break;
     case HASH_ID_SHA3_256: hash_len = CX_SHA256_SIZE; break;
     case HASH_ID_SHA256: hash_len = CX_SHA256_SIZE; break;
+    case HASH_ID_SHA512: hash_len = CX_SHA512_SIZE; break;
     default: return false;
     }
 

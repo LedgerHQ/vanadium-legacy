@@ -27,6 +27,15 @@ pub struct CtxSha3 {
 }
 
 #[repr(C)]
+pub struct CtxSha512 {
+    initialized: bool,
+    counter: u32,
+    blen: usize,
+    block: [u8; 128],
+    acc: [u8; 8 * 8],
+}
+
+#[repr(C)]
 pub struct CtxRipeMd160 {
     initialized: bool,
     counter: u32,
@@ -61,6 +70,7 @@ pub union CtxHashGuest {
     ripemd160: *mut CtxRipeMd160,
     sha3: *mut CtxSha3,
     sha256: *mut CtxSha256,
+    sha512: *mut CtxSha512,
 }
 
 #[repr(C)]
@@ -68,6 +78,7 @@ pub enum CxHashId {
     HashIdRipeMd160,
     HashIdSha3_256,
     HashIdSha256,
+    HashIdSha512,
 }
 
 #[repr(C)]
@@ -199,6 +210,43 @@ impl CtxSha3 {
         let hash_ctx = CtxHashGuest { sha3: &mut *self };
         if !unsafe { ecall_hash_final(CxHashId::HashIdSha3_256, hash_ctx, digest.as_mut_ptr()) } {
             fatal("sha3_final");
+        }
+
+        digest
+    }
+}
+
+impl CtxSha512 {
+    pub fn new() -> Self {
+        CtxSha512 {
+            initialized: false,
+            counter: 0,
+            blen: 0,
+            block: [0; 128],
+            acc: [0; 8 * 8],
+        }
+    }
+
+    pub fn update(&mut self, buffer: &[u8]) -> &mut Self {
+        let hash_ctx = CtxHashGuest { sha512: &mut *self };
+        if !unsafe {
+            ecall_hash_update(
+                CxHashId::HashIdSha512,
+                hash_ctx,
+                buffer.as_ptr(),
+                buffer.len(),
+            )
+        } {
+            fatal("sha512_update");
+        }
+        self
+    }
+
+    pub fn r#final(&mut self) -> [u8; 64] {
+        let mut digest = [0u8; 64];
+        let hash_ctx = CtxHashGuest { sha512: &mut *self };
+        if !unsafe { ecall_hash_final(CxHashId::HashIdSha512, hash_ctx, digest.as_mut_ptr()) } {
+            fatal("sha512_final");
         }
 
         digest
@@ -401,6 +449,18 @@ mod tests {
         assert_eq!(
             CtxSha3::new().update(data).r#final(),
             hex!("72f15d6555488541650ce62c0bed7abd61247635c1973eb38474a2516ed1d884")
+        );
+    }
+
+    #[test]
+    fn test_sha512() {
+        assert_eq!(
+            CtxSha512::new().update(&hex!("")).r#final(),
+            hex!("cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e")
+        );
+        assert_eq!(
+            CtxSha512::new().update(b"Hello").r#final(),
+            hex!("3615f80c9d293ed7402687f94b22d58e529b8cc7916f8fac7fddf7fbd5af4cf777d3d795a7a00a16bf7e7f3fb9561ee9baae480da9fe7a18769e71886b03f315")
         );
     }
 
