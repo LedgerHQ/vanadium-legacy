@@ -8,9 +8,10 @@ PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python ./run.sh --get_master_fingerprint
 
 ## Get a segwit address:
 
-PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python ./run.sh --get_wallet_address --descriptor_template "wpkh(@0/**)" --keys_info "[\"[f5acc2fd/48'/1'/0'/2']tpubDFAqEGNyad35aBCKUAXbQGDjdVhNueno5ZZVEn3sQbW5ci457gLR7HyTmHBg93oourBssgUxuWz1jX5uhc1qaqFo9VsybY1J5FuedLfm4dK\"]"
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python ./run.sh --get_wallet_address --descriptor_template "wpkh(@0/**)" --keys_info "[\"[f5acc2fd/84'/1'/0']tpubDCtKfsNyRhULjZ9XMS4VKKtVcPdVDi8MKUbcSD9MJDyjRu1A2ND5MiipozyyspBT9bg8upEp7a8EAgFxNxXn1d7QkdbL52Ty5jiSLcxPt1P\"]"
 
-Correct answer: tb1qh07qqlkgskfethz644q25ls2qwm6uxtl5dsr44
+Correct answer: tb1qzdr7s2sr0dwmkwx033r4nujzk86u0cy6fmzfjk
+
 
 
 ## Register a wallet
