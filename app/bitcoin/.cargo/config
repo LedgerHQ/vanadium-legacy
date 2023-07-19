@@ -2,8 +2,8 @@
 rustflags = [
   "-L../../c-sdk/build/native",
   "-L./lib/x64/",
-  "-lsdk",
   "-lcxng",
+  "-lsdk",
   "-lspeculos",
   "-lcrypto",
 ]
