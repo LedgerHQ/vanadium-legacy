@@ -19,28 +19,33 @@ cx_err_t cx_ecfp_generate_pair_no_throw(cx_curve_t curve,
                                         cx_ecfp_private_key_t *privkey,
                                         bool keepprivate);
 
-void os_perso_derive_node_bip32(cx_curve_t curve,
-                                const unsigned int *path,
-                                unsigned int pathLength,
-                                unsigned char *privateKey,
-                                unsigned char *chain);
-
 int sys_cx_ecfp_add_point(cx_curve_t curve,
                           uint8_t *R,
                           const uint8_t *P,
                           const uint8_t *Q,
                           size_t X_len);
-unsigned long sys_cx_ecfp_init_public_key(cx_curve_t curve,
-                                          const unsigned char *rawkey,
-                                          unsigned int key_len,
-                                          cx_ecfp_public_key_t *key);
 
+cx_err_t cx_ecfp_add_point_no_throw(cx_curve_t curve, uint8_t *R, const uint8_t *P, const uint8_t *Q);
 
 int sys_cx_ecfp_scalar_mult(cx_curve_t curve,
                             unsigned char *P,
                             unsigned int P_len,
                             const unsigned char *k,
                             unsigned int k_len);
+
+cx_err_t cx_ecfp_scalar_mult_no_throw(cx_curve_t curve, uint8_t *P, const uint8_t *k, size_t k_len);
+
+void os_perso_derive_node_bip32(cx_curve_t curve,
+                                const unsigned int *path,
+                                unsigned int pathLength,
+                                unsigned char *privateKey,
+                                unsigned char *chain);
+
+unsigned long sys_cx_ecfp_init_public_key(cx_curve_t curve,
+                                          const unsigned char *rawkey,
+                                          unsigned int key_len,
+                                          cx_ecfp_public_key_t *key);
+
 
 int cx_ecfp_decode_sig_der(const uint8_t *input,
                            size_t input_len,

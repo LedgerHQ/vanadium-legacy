@@ -310,6 +310,16 @@ cx_err_t cx_ecfp_generate_pair_no_throw(cx_curve_t curve,
     return sys_cx_ecfp_generate_pair(curve, pubkey, privkey, keepprivate);
 }
 
+
+cx_err_t cx_ecfp_add_point_no_throw(cx_curve_t curve, uint8_t *R, const uint8_t *P, const uint8_t *Q) {
+    return sys_cx_ecfp_add_point(curve, R, P, Q, 65);
+}
+
+
+cx_err_t cx_ecfp_scalar_mult_no_throw(cx_curve_t curve, uint8_t *P, const uint8_t *k, size_t k_len) {
+    return sys_cx_ecfp_scalar_mult(curve, P, 65, k, k_len);
+}
+
 cx_err_t cx_ecdsa_sign_no_throw(const cx_ecfp_private_key_t *pvkey,
                        uint32_t                     mode,
                        cx_md_t                      hashID,

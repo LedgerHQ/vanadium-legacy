@@ -71,6 +71,28 @@ bool ecall_cx_ecfp_generate_pair(cx_curve_t curve,
     return eret.success;
 }
 
+bool ecall_cx_ecfp_add_point(cx_curve_t curve, uint8_t *R, const uint8_t *P, const uint8_t *Q) {
+    eret_t eret;
+
+    if (!_sys_cx_ecfp_add_point(&eret, curve, NP(R), NP(P), NP(Q))) {
+        errx(1, "_sys_cx_ecfp_add_point failed");
+    }
+
+    return eret.success;
+}
+
+bool ecall_cx_ecfp_scalar_mult(cx_curve_t curve, uint8_t *P, const uint8_t *k, size_t k_len) {
+    eret_t eret;
+
+    if (!_sys_cx_ecfp_scalar_mult(&eret, curve, NP(P), NP(k), k_len)) {
+        errx(1, "_sys_cx_ecfp_scalar_mult failed");
+    }
+
+    return eret.success;
+}
+
+
+
 void ecall_get_random_bytes(uint8_t *buffer, const size_t size)
 {
     if (!sys_get_random_bytes(NP(buffer), size)) {

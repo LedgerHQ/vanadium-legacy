@@ -254,6 +254,8 @@ ECALL3(ecall_hash_final, ECALL_HASH_FINAL, bool, const cx_hash_id_t, hash_id, ct
 ECALL3(ecall_memset, ECALL_MEMSET, void *, void *, s, int, c, size_t, n)
 ECALL3(ecall_memcpy, ECALL_MEMCPY, void *, void *, dest, const void *, src, size_t, n)
 ECALL4(ecall_cx_ecfp_generate_pair, ECALL_CX_ECFP_GENERATE_PAIR, bool, cx_curve_t, curve, cx_ecfp_public_key_t *, pubkey, cx_ecfp_private_key_t *, privkey, bool, keep_privkey)
+ECALL4(ecall_cx_ecfp_add_point, ECALL_CX_ECFP_ADD_POINT, bool, cx_curve_t, curve, uint8_t *, r, const uint8_t *, p, const uint8_t *, q)
+ECALL4(ecall_cx_ecfp_scalar_mult, ECALL_CX_ECFP_SCALAR_MULT, bool, cx_curve_t, curve, uint8_t *, p, const uint8_t *, k, size_t, k_len)
 ECALL4(ecall_hash_update, ECALL_HASH_UPDATE, bool, const cx_hash_id_t, hash_id, ctx_hash_guest_t *, ctx, const uint8_t *, buffer, const size_t, size)
 ECALL4(ecall_tostring256, ECALL_TOSTRING256, bool, const uint256_t *, number, const unsigned int, base, char *, out, size_t, len)
 ECALL4(ecall_ecdsa_verify, ECALL_ECDSA_VERIFY, bool, const cx_ecfp_public_key_t *, key, const uint8_t *, hash, const uint8_t *, sig, const size_t, sig_len)

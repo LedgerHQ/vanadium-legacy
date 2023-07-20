@@ -33,6 +33,18 @@ extern "C" {
         privkey: &mut EcfpPrivateKey,
         keep_privkey: bool,
     ) -> bool;
+    pub fn ecall_cx_ecfp_add_point(
+        curve: CxCurve,
+        r: *mut u8,
+        p: *const u8,
+        q: *const u8,
+    ) -> bool;
+    pub fn ecall_cx_ecfp_scalar_mult(
+        curve: CxCurve,
+        p: *mut u8,
+        k: *const u8,
+        k_len: usize,
+    ) -> bool;
     pub fn ecall_derive_node_bip32(
         curve: CxCurve,
         path: *const u32,
