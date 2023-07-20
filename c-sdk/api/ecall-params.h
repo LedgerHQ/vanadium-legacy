@@ -43,14 +43,24 @@ typedef struct ctx_sha3_s {
     uint64_t acc[25];
 } ctx_sha3_t;
 
+typedef struct ctx_sha512_s {
+  bool initialized;
+  uint32_t counter;
+  size_t blen;
+  uint8_t block[128];
+  uint8_t acc[8 * 8];
+} ctx_sha512_t;
+
 typedef union ctx_hash_s {
     ctx_ripemd160_t ripemd160;
     ctx_sha256_t sha256;
     ctx_sha3_t sha3;
+    ctx_sha512_t sha512;
 } __attribute__((packed)) ctx_hash_guest_t;
 
 typedef enum cx_hash_id_e {
     HASH_ID_RIPEMD160,
     HASH_ID_SHA3_256,
     HASH_ID_SHA256,
+    HASH_ID_SHA512,
 } cx_hash_id_t;

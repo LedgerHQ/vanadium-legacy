@@ -168,6 +168,11 @@ cx_err_t cx_ecpoint_rnd_fixed_scalarmul(cx_ecpoint_t *ec_P, const uint8_t *k, si
     return sys_cx_ecpoint_rnd_fixed_scalarmul(ec_P, k, k_len);
 }
 
+cx_err_t cx_keccak_init_no_throw(cx_sha3_t *hash, size_t size) {
+    cx_keccak_init(hash, size);
+    return 0;
+}
+
 void os_perso_derive_node_bip32(cx_curve_t curve,
                                 const unsigned int *path,
                                 unsigned int pathLength,
@@ -295,4 +300,100 @@ void os_longjmp(unsigned int exception)
     fprintf(stderr, "os_longjmp() called\n");
     fprintf(stderr, "This shouldn't never happen, there's a bug somewhere\n");
     exit(1);
+}
+
+
+cx_err_t cx_ecfp_generate_pair_no_throw(cx_curve_t curve,
+                                        cx_ecfp_public_key_t *pubkey,
+                                        cx_ecfp_private_key_t *privkey,
+                                        bool keepprivate) {
+    return sys_cx_ecfp_generate_pair(curve, pubkey, privkey, keepprivate);
+}
+
+cx_err_t cx_ecdsa_sign_no_throw(const cx_ecfp_private_key_t *pvkey,
+                       uint32_t                     mode,
+                       cx_md_t                      hashID,
+                       const uint8_t *              hash,
+                       size_t                       hash_len,
+                       uint8_t *                    sig,
+                       size_t *                     sig_len,
+                       uint32_t *                   info) {
+    // TODO: this might throw
+    *sig_len = sys_cx_ecdsa_sign(pvkey, mode, hashID, hash, hash_len, sig, *sig_len, info);
+    return CX_OK;
+}
+
+bool cx_ecdsa_verify_no_throw(const cx_ecfp_public_key_t *key,
+                     const uint8_t *             hash,
+                     size_t                      hash_len,
+                     const uint8_t *             sig,
+                     size_t                      sig_len) {
+    return sys_cx_ecdsa_verify(key,
+        0, 0, // unused params
+        hash, hash_len, sig, sig_len);
+}
+
+cx_err_t cx_math_mult_no_throw(uint8_t *r, const uint8_t *a, const uint8_t *b, size_t len) {
+    // TODO: might throw
+    sys_cx_math_mult(r, a, b, len);
+    return CX_OK;
+}
+
+cx_err_t cx_math_multm_no_throw(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, size_t len) {
+    // TODO: might throw
+    sys_cx_math_multm(r, a, b, m, len);
+    return CX_OK;
+}
+
+cx_err_t cx_ecfp_init_private_key_no_throw(cx_curve_t             curve,
+                                  const uint8_t *        rawkey,
+                                  size_t                 key_len,
+                                  cx_ecfp_private_key_t *pvkey) {
+    sys_cx_ecfp_init_private_key(curve, rawkey, key_len, pvkey);
+    return CX_OK;
+}
+
+size_t cx_hash_sha256(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len) {
+    if (out_len < CX_SHA256_SIZE) {
+        return 0;
+    }
+    return sys_cx_hash_sha256(in, in_len, out, out_len);
+}
+
+size_t cx_hash_ripemd160(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len) {
+  if (out_len < CX_RIPEMD160_SIZE) {
+    return 0;
+  }
+
+  cx_ripemd160_t ripemd160;
+  cx_ripemd160_init(&ripemd160);
+  spec_cx_ripemd160_update(&ripemd160, in, in_len);
+  spec_cx_ripemd160_final(&ripemd160, out);
+  return CX_RIPEMD160_SIZE;
+}
+
+cx_err_t cx_ripemd160_init_no_throw(cx_ripemd160_t *hash) {
+    cx_ripemd160_init(hash);
+    return CX_OK;
+}
+
+cx_err_t cx_sha256_init_no_throw(cx_sha256_t *hash) {
+    cx_sha256_init(hash);
+    return CX_OK;
+}
+
+cx_err_t cx_sha512_init_no_throw(cx_sha512_t *hash) {
+    cx_sha512_init(hash);
+    return CX_OK;
+}
+
+cx_err_t cx_hash_no_throw(cx_hash_t *hash,
+                          uint32_t mode,
+                          const uint8_t *in,
+                          size_t len,
+                          uint8_t *out,
+                          size_t out_len) {
+    // TODO: might throw
+    sys_cx_hash(hash, mode, in, len, out, out_len);
+    return CX_OK;
 }
