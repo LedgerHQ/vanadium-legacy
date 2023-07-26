@@ -82,4 +82,26 @@ pub fn handle_get_wallet_address<'a>(
 }
 
 
-// TODO: add tests
+// TODO: add more tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_wallet_address_singlesig_wit() {
+        let req = RequestGetWalletAddress {
+            name: "".into(),
+            descriptor_template: "wpkh(@0/**)".into(),
+            keys_info: vec!["[f5acc2fd/84'/1'/0']tpubDCtKfsNyRhULjZ9XMS4VKKtVcPdVDi8MKUbcSD9MJDyjRu1A2ND5MiipozyyspBT9bg8upEp7a8EAgFxNxXn1d7QkdbL52Ty5jiSLcxPt1P".into()],
+            wallet_hmac: Cow::Owned([].into()),
+            address_index: 0,
+            change: false,
+            display: false,
+        };
+
+        let resp = handle_get_wallet_address(req).unwrap();
+
+        assert_eq!(resp.address, "tb1qzdr7s2sr0dwmkwx033r4nujzk86u0cy6fmzfjk");
+    }
+}
