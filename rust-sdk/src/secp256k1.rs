@@ -1,0 +1,30 @@
+// Drop-in replacements for rust-secp256k1 functions using the VM ecalls.
+// Functions in this module use row array types for keys, etc, and omit the Context parameter of the
+// corresponding functions in rust-secp256k1's secp256k1_sys module (imported as ffi in rust-secp256k1).
+
+use crate::ecall::{ecall_cx_ecfp_add_point, ecall_cx_ecfp_scalar_mult};
+
+use crate::crypto::CxCurve;
+
+use core::ffi::{c_int, c_uchar};
+
+pub const SECP256K1_GENERATOR: [u8; 65] = [
+    0x04,
+    0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07,
+    0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98,
+    0x48, 0x3A, 0xDA, 0x77, 0x26, 0xA3, 0xC4, 0x65, 0x5D, 0xA4, 0xFB, 0xFC, 0x0E, 0x11, 0x08, 0xA8,
+    0xFD, 0x17, 0xB4, 0x48, 0xA6, 0x85, 0x54, 0x19, 0x9C, 0x47, 0xD0, 0x8F, 0xFB, 0x10, 0xD4, 0xB8
+];
+
+pub fn secp256k1_ec_pubkey_tweak_add(_cx: *const (), pk: *mut [c_uchar; 65], tweak: *const c_uchar) -> c_int {
+    let mut p: [u8; 65] = SECP256K1_GENERATOR;
+
+    unsafe {
+        if !ecall_cx_ecfp_scalar_mult(CxCurve::Secp256k1, p.as_mut_ptr(), tweak, 32) { return 0; }
+
+        if !ecall_cx_ecfp_add_point(CxCurve::Secp256k1, (*pk).as_mut_ptr(), (*pk).as_mut_ptr(), p.as_mut_ptr()) { return 0; }
+    }
+
+    1
+}
+
