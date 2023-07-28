@@ -174,7 +174,7 @@ static const uint64bits_t primeSqrt[] = {
 // --------------------------------------------------------------------------
 // -
 // --------------------------------------------------------------------------
-void cx_sha512_block(cx_sha512_t *hash)
+void spec_cx_sha512_block(cx_sha512_t *hash)
 {
 
   unsigned char j;
@@ -346,7 +346,7 @@ void cx_sha512_block(cx_sha512_t *hash)
 #endif
 }
 #else
-void cx_sha512_block(cx_sha512_t *ctx);
+void spec_cx_sha512_block(cx_sha512_t *ctx);
 #endif //! CX_SHA512_BLOCK_ALT_METHOD
 
 int spec_cx_sha512_update(cx_sha512_t *ctx, const uint8_t *data, size_t len)
@@ -376,7 +376,7 @@ int spec_cx_sha512_update(cx_sha512_t *ctx, const uint8_t *data, size_t len)
         THROW(INVALID_PARAMETER);
       }
       memcpy(block + blen, data, r);
-      cx_sha512_block(ctx);
+      spec_cx_sha512_block(ctx);
       blen = 0;
       ctx->header.counter++;
       data += r;
@@ -414,7 +414,7 @@ int spec_cx_sha512_final(cx_sha512_t *ctx, uint8_t *digest)
   // one more block?
   if ((128 - blen) < 16) {
     memset(block + blen, 0, 128 - blen);
-    cx_sha512_block(ctx);
+    spec_cx_sha512_block(ctx);
     blen = 0;
   }
   // last block!
@@ -424,7 +424,7 @@ int spec_cx_sha512_final(cx_sha512_t *ctx, uint8_t *digest)
 #else
   (*(uint64_t *)(&block[128 - 8])) = bitlen;
 #endif
-  cx_sha512_block(ctx);
+  spec_cx_sha512_block(ctx);
   // provide result
   len = (ctx->header.algo == CX_SHA512) ? 512 >> 3 : 384 >> 3;
 #ifdef OS_LITTLE_ENDIAN
