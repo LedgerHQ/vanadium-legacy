@@ -32,15 +32,11 @@ if (NOT NATIVE)
 else()
   message(STATUS "Building native binaries")
 
-  if(NOT DEFINED ENV{SPECULOS_DIR})
-    message(FATAL_ERROR "Please set SPECULOS_DIR environment variable")
-  endif()
 
   if(NOT DEFINED ENV{BOLOS_SDK_DIR})
     message(FATAL_ERROR "Please set BOLOS_SDK_DIR environment variable")
   endif()
 
-  set(SPECULOS_DIR "$ENV{SPECULOS_DIR}" CACHE INTERNAL "Copied from environment variable")
   set(BOLOS_SDK_DIR "$ENV{BOLOS_SDK_DIR}" CACHE INTERNAL "Copied from environment variable")
 
   add_compile_definitions(NATIVE)
@@ -54,7 +50,7 @@ endif()
 
 add_compile_options(-Werror)
 
-# # Make sure to include sdk/ first to prevent ${SPECULOS_DIR}/src/sdk.h
+# # Make sure to include sdk/ first to prevent native/speculos/sdk.h
 # # being included instead of sdk/sdk.h.
 
 include_directories(BEFORE ./)
@@ -78,26 +74,15 @@ if (NOT NATIVE)
 
 else()
 
-  add_compile_options(-DOS_LITTLE_ENDIAN)
-
   message(STATUS "Building native binaries")
-
-  if(NOT DEFINED ENV{SPECULOS_DIR})
-    message(FATAL_ERROR "Please set SPECULOS_DIR environment variable")
-  endif()
 
   if(NOT DEFINED ENV{BOLOS_SDK_DIR})
     message(FATAL_ERROR "Please set BOLOS_SDK_DIR environment variable")
   endif()
 
-  set(SPECULOS_DIR "$ENV{SPECULOS_DIR}" CACHE INTERNAL "Copied from environment variable")
   set(BOLOS_SDK_DIR "$ENV{BOLOS_SDK_DIR}" CACHE INTERNAL "Copied from environment variable")
 
-  add_compile_definitions(HAVE_NES_CRYPT HAVE_ST_EDES_PLUS HAVE_ST_AES HAVE_CRC HAVE_HASH HAVE_RIPEMD160 HAVE_SHA224 HAVE_SHA256 HAVE_SHA3 HAVE_SHA384 HAVE_SHA512 HAVE_SHA512_WITH_BLOCK_ALT_METHOD HAVE_SHA512_WITH_BLOCK_ALT_METHOD_M0 HAVE_BLAKE2 HAVE_GROESTL HAVE_HMAC HAVE_PBKDF2 HAVE_DES HAVE_AES HAVE_MATH HAVE_RNG HAVE_RNG_RFC6979 HAVE_RNG_SP800_90A HAVE_ECC HAVE_ECC_WEIERSTRASS HAVE_ECC_TWISTED_EDWARDS HAVE_ECC_MONTGOMERY HAVE_SECP256K1_CURVE HAVE_SECP256R1_CURVE HAVE_SECP384R1_CURVE HAVE_SECP521R1_CURVE HAVE_FR256V1_CURVE HAVE_STARK256_CURVE HAVE_BRAINPOOL_P256R1_CURVE HAVE_BRAINPOOL_P256T1_CURVE HAVE_BRAINPOOL_P320R1_CURVE HAVE_BRAINPOOL_P320T1_CURVE HAVE_BRAINPOOL_P384R1_CURVE HAVE_BRAINPOOL_P384T1_CURVE HAVE_BRAINPOOL_P512R1_CURVE HAVE_BRAINPOOL_P512T1_CURVE HAVE_BLS12_381_G1_CURVE HAVE_CV25519_CURVE HAVE_CV448_CURVE HAVE_ED25519_CURVE HAVE_ED448_CURVE HAVE_ECDH HAVE_ECDSA HAVE_EDDSA HAVE_ECSCHNORR HAVE_X25519 HAVE_X448)
-
-  # HAVE_SHA512_WITH_BLOCK_ALT_METHOD from cxlib is called CX_SHA512_BLOCK_ALT_METHOD in speculos.
-  # Weird things happen at linking time if only one of them is defined.
-  add_compile_definitions(CX_SHA512_BLOCK_ALT_METHOD)
+  add_compile_definitions(HAVE_NES_CRYPT HAVE_ST_EDES_PLUS HAVE_ST_AES HAVE_CRC HAVE_HASH HAVE_RIPEMD160 HAVE_SHA224 HAVE_SHA256 HAVE_SHA3 HAVE_SHA384 HAVE_SHA512 HAVE_BLAKE2 HAVE_GROESTL HAVE_HMAC HAVE_PBKDF2 HAVE_DES HAVE_AES HAVE_MATH HAVE_RNG HAVE_RNG_RFC6979 HAVE_RNG_SP800_90A HAVE_ECC HAVE_ECC_WEIERSTRASS HAVE_ECC_TWISTED_EDWARDS HAVE_ECC_MONTGOMERY HAVE_SECP256K1_CURVE HAVE_SECP256R1_CURVE HAVE_SECP384R1_CURVE HAVE_SECP521R1_CURVE HAVE_FR256V1_CURVE HAVE_STARK256_CURVE HAVE_BRAINPOOL_P256R1_CURVE HAVE_BRAINPOOL_P256T1_CURVE HAVE_BRAINPOOL_P320R1_CURVE HAVE_BRAINPOOL_P320T1_CURVE HAVE_BRAINPOOL_P384R1_CURVE HAVE_BRAINPOOL_P384T1_CURVE HAVE_BRAINPOOL_P512R1_CURVE HAVE_BRAINPOOL_P512T1_CURVE HAVE_BLS12_381_G1_CURVE HAVE_CV25519_CURVE HAVE_CV448_CURVE HAVE_ED25519_CURVE HAVE_ED448_CURVE HAVE_ECDH HAVE_ECDSA HAVE_EDDSA HAVE_ECSCHNORR HAVE_X25519 HAVE_X448)
 
   add_library(cxng
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_aead.c
@@ -141,50 +126,51 @@ else()
   target_include_directories (cxng PUBLIC ${BOLOS_SDK_DIR}/include ${BOLOS_SDK_DIR}/lib_cxng/include ${BOLOS_SDK_DIR}/target/nanox/include/)
 
   add_library(speculos
-    ${SPECULOS_DIR}/src/bolos/bagl.c
-    ${SPECULOS_DIR}/src/bolos/cx_aes.c
-    ${SPECULOS_DIR}/src/bolos/cx_aes_sdk2.c
-    ${SPECULOS_DIR}/src/bolos/cx_blake2b.c
-    ${SPECULOS_DIR}/src/bolos/cx_bn.c
-    ${SPECULOS_DIR}/src/bolos/cx.c
-    ${SPECULOS_DIR}/src/bolos/cx_crc.c
-    ${SPECULOS_DIR}/src/bolos/cx_curve25519.c
-    ${SPECULOS_DIR}/src/bolos/cx_ec.c
-    ${SPECULOS_DIR}/src/bolos/cx_ec_domain.c
-    ${SPECULOS_DIR}/src/bolos/cx_ecpoint.c
-    ${SPECULOS_DIR}/src/bolos/cx_ed25519.c
-    ${SPECULOS_DIR}/src/bolos/cx_hash.c
-    ${SPECULOS_DIR}/src/bolos/cx_hkdf.c
-    ${SPECULOS_DIR}/src/bolos/cx_hmac.c
-    ${SPECULOS_DIR}/src/bolos/cxlib.c
-    ${SPECULOS_DIR}/src/bolos/cx_math.c
-    ${SPECULOS_DIR}/src/bolos/cx_montgomery.c
-    ${SPECULOS_DIR}/src/bolos/cx_mpi.c
-    ${SPECULOS_DIR}/src/bolos/cx_ripemd160.c
-    ${SPECULOS_DIR}/src/bolos/cx_rng_rfc6979.c
-    ${SPECULOS_DIR}/src/bolos/cx_scc.c
-    ${SPECULOS_DIR}/src/bolos/cx_sha256.c
-    ${SPECULOS_DIR}/src/bolos/cx_sha3.c
-    ${SPECULOS_DIR}/src/bolos/cx_sha512.c
-    ${SPECULOS_DIR}/src/bolos/cx_twisted_edwards.c
-    ${SPECULOS_DIR}/src/bolos/cx_utils.c
-    ${SPECULOS_DIR}/src/bolos/cx_weierstrass.c
-    ${SPECULOS_DIR}/src/bolos/default.c
-    ${SPECULOS_DIR}/src/bolos/endorsement.c
-    ${SPECULOS_DIR}/src/bolos/os_1.2.c
-    ${SPECULOS_DIR}/src/bolos/os_1.5.c
-    ${SPECULOS_DIR}/src/bolos/os_1.6.c
-    ${SPECULOS_DIR}/src/bolos/os_2.0.c
-    ${SPECULOS_DIR}/src/bolos/os_bip32.c
-    ${SPECULOS_DIR}/src/bolos/os.c
-    ${SPECULOS_DIR}/src/bolos/os_eip2333.c
-    ${SPECULOS_DIR}/src/bolos/seproxyhal.c
+    native/speculos/bolos/bagl.c
+    native/speculos/bolos/cx_aes.c
+    native/speculos/bolos/cx_aes_sdk2.c
+    native/speculos/bolos/cx_blake2b.c
+    native/speculos/bolos/cx_bn.c
+    native/speculos/bolos/cx.c
+    native/speculos/bolos/cx_crc.c
+    native/speculos/bolos/cx_curve25519.c
+    native/speculos/bolos/cx_ec.c
+    native/speculos/bolos/cx_ec_domain.c
+    native/speculos/bolos/cx_ecpoint.c
+    native/speculos/bolos/cx_ed25519.c
+    native/speculos/bolos/cx_hash.c
+    native/speculos/bolos/cx_hkdf.c
+    native/speculos/bolos/cx_hmac.c
+    native/speculos/bolos/cxlib.c
+    native/speculos/bolos/cx_math.c
+    native/speculos/bolos/cx_montgomery.c
+    native/speculos/bolos/cx_mpi.c
+    native/speculos/bolos/cx_ripemd160.c
+    native/speculos/bolos/cx_rng_rfc6979.c
+    native/speculos/bolos/cx_scc.c
+    native/speculos/bolos/cx_sha256.c
+    native/speculos/bolos/cx_sha3.c
+    native/speculos/bolos/cx_sha512.c
+    native/speculos/bolos/cx_twisted_edwards.c
+    native/speculos/bolos/cx_utils.c
+    native/speculos/bolos/cx_weierstrass.c
+    native/speculos/bolos/default.c
+    native/speculos/bolos/endorsement.c
+    native/speculos/bolos/os_1.2.c
+    native/speculos/bolos/os_1.5.c
+    native/speculos/bolos/os_1.6.c
+    native/speculos/bolos/os_2.0.c
+    native/speculos/bolos/os_bip32.c
+    native/speculos/bolos/os.c
+    native/speculos/bolos/os_eip2333.c
+    native/speculos/bolos/seproxyhal.c
 
     native/speculos.c
   )
   target_compile_definitions(speculos PUBLIC IMPORT_SPECULOS_HEADERS)
+  target_compile_definitions(speculos PUBLIC OS_LITTLE_ENDIAN)
 
-  target_include_directories (speculos PUBLIC ${SPECULOS_DIR}/src/ ${SPECULOS_DIR}/src/bolos/)
+  target_include_directories (speculos PUBLIC native/speculos/ native/speculos/bolos/)
 
   add_library(sdk
     crypto.c
