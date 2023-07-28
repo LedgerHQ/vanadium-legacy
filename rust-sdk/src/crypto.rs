@@ -464,6 +464,11 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_handle_get_master_fingerprint() {
+        assert_eq!(get_master_fingerprint().unwrap(), 0xf5acc2fdu32);
+    }
+
     // TODO: add more tests for ecdsa; probably, move ecdsa to a submodule
     #[test]
     fn test_ecdsa_sign_verify() {

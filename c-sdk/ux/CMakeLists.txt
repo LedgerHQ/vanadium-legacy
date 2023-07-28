@@ -10,5 +10,5 @@ add_library(ux
 if (NOT NATIVE)
   target_include_directories (ux PUBLIC ../risc-v/)
 else()
-  target_include_directories (ux PUBLIC ../native/ ${SPECULOS_DIR}/src/ ${SPECULOS_DIR}/src/bolos/)
+  target_include_directories (ux PUBLIC ../native/ PUBLIC native/ ${BOLOS_SDK_DIR}/include ${BOLOS_SDK_DIR}/lib_cxng/include ${BOLOS_SDK_DIR}/target/nanox/include/)
 endif()

@@ -10,6 +10,8 @@ mod ecall;
 pub mod glyphs;
 pub mod ux;
 
+pub mod secp256k1;
+
 use alloc::vec::Vec;
 use alloc::{fmt, vec};
 

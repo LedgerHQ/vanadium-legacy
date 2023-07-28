@@ -4,8 +4,11 @@
 
 #include <openssl/bn.h>
 
-#include "cxlib.h"
 #include "cx.h"
+
+#ifdef IMPORT_SPECULOS_HEADERS
+#include "cxlib.h"
+#endif
 
 struct cx_mpi_ecpoint_s;
 typedef struct cx_mpi_ecpoint_s cx_mpi_ecpoint_t;
@@ -14,10 +17,10 @@ int sys_cx_ecfp_generate_pair(cx_curve_t curve,
                               cx_ecfp_public_key_t *public_key,
                               cx_ecfp_private_key_t *private_key,
                               int keep_private);
-cx_err_t cx_ecfp_generate_pair_no_throw(cx_curve_t curve,
-                                        cx_ecfp_public_key_t *pubkey,
-                                        cx_ecfp_private_key_t *privkey,
-                                        bool keepprivate);
+
+cx_err_t cx_ecfp_add_point_no_throw(cx_curve_t curve, uint8_t *R, const uint8_t *P, const uint8_t *Q);
+
+cx_err_t cx_ecfp_scalar_mult_no_throw(cx_curve_t curve, uint8_t *P, const uint8_t *k, size_t k_len);
 
 void os_perso_derive_node_bip32(cx_curve_t curve,
                                 const unsigned int *path,
@@ -25,22 +28,11 @@ void os_perso_derive_node_bip32(cx_curve_t curve,
                                 unsigned char *privateKey,
                                 unsigned char *chain);
 
-int sys_cx_ecfp_add_point(cx_curve_t curve,
-                          uint8_t *R,
-                          const uint8_t *P,
-                          const uint8_t *Q,
-                          size_t X_len);
 unsigned long sys_cx_ecfp_init_public_key(cx_curve_t curve,
                                           const unsigned char *rawkey,
                                           unsigned int key_len,
                                           cx_ecfp_public_key_t *key);
 
-
-int sys_cx_ecfp_scalar_mult(cx_curve_t curve,
-                            unsigned char *P,
-                            unsigned int P_len,
-                            const unsigned char *k,
-                            unsigned int k_len);
 
 int cx_ecfp_decode_sig_der(const uint8_t *input,
                            size_t input_len,
@@ -50,63 +42,12 @@ int cx_ecfp_decode_sig_der(const uint8_t *input,
                            const uint8_t **s,
                            size_t *s_len);
 
-int sys_cx_ecfp_init_private_key(cx_curve_t curve, const uint8_t *raw_key,
-                                 unsigned int key_len,
-                                 cx_ecfp_private_key_t *key);
-cx_err_t cx_ecfp_init_private_key_no_throw(cx_curve_t curve,
-                                  const uint8_t *rawkey,
-                                  size_t key_len,
-                                  cx_ecfp_private_key_t *pvkey);
-
-
-cx_err_t cx_keccak_init_no_throw(cx_sha3_t *hash, size_t size);
-
-cx_err_t cx_sha256_init_no_throw(cx_sha256_t *hash);
-
-int cx_sha512_init(cx_sha512_t *hash);
-cx_err_t cx_sha512_init_no_throw(cx_sha512_t *hash);
-
-cx_err_t cx_hash_no_throw(cx_hash_t *hash,
-                          uint32_t mode,
-                          const uint8_t *in,
-                          size_t len,
-                          uint8_t *out,
-                          size_t out_len);
-
-
 int sys_cx_ecdh(const cx_ecfp_private_key_t *key,
                 int mode,
                 const uint8_t *public_point,
                 size_t P_len,
                 uint8_t *secret,
                 size_t secret_len);
-
-cx_err_t cx_ecdsa_sign_no_throw(const cx_ecfp_private_key_t *pvkey,
-                       uint32_t                     mode,
-                       cx_md_t                      hashID,
-                       const uint8_t *              hash,
-                       size_t                       hash_len,
-                       uint8_t *                    sig,
-                       size_t *                     sig_len,
-                       uint32_t *                   info);
-int sys_cx_ecdsa_sign(const cx_ecfp_private_key_t *key, int mode,
-                      cx_md_t hashID, const uint8_t *hash,
-                      unsigned int hash_len, uint8_t *sig, unsigned int sig_len,
-                      unsigned int *info);
-
-int sys_cx_ecdsa_verify(const cx_ecfp_public_key_t *key,
-                        int mode,
-                        cx_md_t hashID,
-                        const uint8_t *hash,
-                        unsigned int hash_len,
-                        const uint8_t *sig,
-                        unsigned int sig_len);
-
-bool cx_ecdsa_verify_no_throw(const cx_ecfp_public_key_t *key,
-                     const uint8_t *             hash,
-                     size_t                      hash_len,
-                     const uint8_t *             sig,
-                     size_t                      sig_len);
 
 int sys_cx_eddsa_sign(const cx_ecfp_private_key_t *pvkey,
                       int mode,
@@ -350,23 +291,10 @@ static inline bool os_perso_derive_node_bip32_nt(cx_curve_t curve,
                                                  uint8_t *privateKey,
                                                  uint8_t *chain)
 {
-    os_perso_derive_node_bip32(curve, path, pathLength, privateKey, chain);
+    sys_os_perso_derive_node_bip32(curve, path, pathLength, privateKey, chain);
 
     /* XXX: speculos exits if an error is encountered */
     return true;
 }
 
 unsigned long sys_cx_hash(cx_hash_t *hash, int mode, const uint8_t *in, size_t len, uint8_t *out, size_t out_len);
-int sys_cx_hash_sha256(const uint8_t *in, size_t len, uint8_t *out, size_t out_len);
-size_t cx_hash_sha256(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len);
-
-int cx_ripemd160_init(cx_ripemd160_t *hash);
-cx_err_t cx_ripemd160_init_no_throw(cx_ripemd160_t *hash);
-int spec_cx_ripemd160_update(cx_ripemd160_t *ctx, const uint8_t *data, size_t len);
-int spec_cx_ripemd160_final(cx_ripemd160_t *ctx, uint8_t *digest);
-size_t cx_hash_ripemd160(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len);
-
-cx_err_t cx_math_mult_no_throw(uint8_t *r, const uint8_t *a, const uint8_t *b, size_t len);
-int sys_cx_math_mult(uint8_t *r, const uint8_t *a, const uint8_t *b, unsigned int len);
-cx_err_t cx_math_multm_no_throw(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, size_t len);
-int sys_cx_math_multm(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, unsigned int len);

@@ -99,6 +99,49 @@ bool _sys_cx_ecfp_generate_pair(eret_t *eret, cx_curve_t curve, guest_pointer_t 
     return true;
 }
 
+bool _sys_cx_ecfp_add_point(eret_t *eret, cx_curve_t curve, guest_pointer_t p_r, guest_pointer_t p_p, guest_pointer_t p_q) {
+    uint8_t r[65], p[65], q[65];
+
+    if (!copy_guest_buffer(p_r, r, sizeof(r))) return false;
+    if (!copy_guest_buffer(p_p, p, sizeof(p))) return false;
+    if (!copy_guest_buffer(p_q, q, sizeof(q))) return false;
+
+    cx_err_t err = cx_ecfp_add_point_no_throw(curve, r, p, q);
+
+    if (err != CX_OK) {
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_host_buffer(p_r, r, sizeof(r))) {
+        return false;
+    }
+
+    eret->success = true;
+    return true;
+}
+
+bool _sys_cx_ecfp_scalar_mult(eret_t *eret, cx_curve_t curve, guest_pointer_t p_p, guest_pointer_t p_k, size_t k_len) {
+    uint8_t p[65], k[32];
+
+    if (!copy_guest_buffer(p_p, p, sizeof(p))) return false;
+    if (!copy_guest_buffer(p_k, k, sizeof(k))) return false;
+
+    cx_err_t err = cx_ecfp_scalar_mult_no_throw(curve, p, k, k_len);
+
+    if (err != CX_OK) {
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_host_buffer(p_p, p, sizeof(p))) {
+        return false;
+    }
+
+    eret->success = true;
+    return true;
+}
+
 bool sys_ecdsa_sign(eret_t *eret, const guest_pointer_t p_key, const int mode,
                     const cx_md_t hash_id, const guest_pointer_t p_hash,
                     guest_pointer_t p_sig, size_t sig_len, guest_pointer_t p_parity)

@@ -10,7 +10,7 @@ use crate::{
 
 use error::*;
 
-// TODO: implement UX to show derived address on screen
+// TODO: implement UX to show derived pubkey on screen
 
 pub fn handle_get_extended_pubkey<'a>(
     req: RequestGetExtendedPubkey,
