@@ -42,14 +42,6 @@ int cx_ecfp_decode_sig_der(const uint8_t *input,
                            const uint8_t **s,
                            size_t *s_len);
 
-int sys_cx_ecfp_init_private_key(cx_curve_t curve, const uint8_t *raw_key,
-                                 unsigned int key_len,
-                                 cx_ecfp_private_key_t *key);
-cx_err_t cx_ecfp_init_private_key_no_throw(cx_curve_t curve,
-                                  const uint8_t *rawkey,
-                                  size_t key_len,
-                                  cx_ecfp_private_key_t *pvkey);
-
 int sys_cx_ecdh(const cx_ecfp_private_key_t *key,
                 int mode,
                 const uint8_t *public_point,
@@ -299,7 +291,7 @@ static inline bool os_perso_derive_node_bip32_nt(cx_curve_t curve,
                                                  uint8_t *privateKey,
                                                  uint8_t *chain)
 {
-    os_perso_derive_node_bip32(curve, path, pathLength, privateKey, chain);
+    sys_os_perso_derive_node_bip32(curve, path, pathLength, privateKey, chain);
 
     /* XXX: speculos exits if an error is encountered */
     return true;

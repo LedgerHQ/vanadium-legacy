@@ -168,15 +168,6 @@ cx_err_t cx_ecpoint_rnd_fixed_scalarmul(cx_ecpoint_t *ec_P, const uint8_t *k, si
     return sys_cx_ecpoint_rnd_fixed_scalarmul(ec_P, k, k_len);
 }
 
-void os_perso_derive_node_bip32(cx_curve_t curve,
-                                const unsigned int *path,
-                                unsigned int pathLength,
-                                unsigned char *privateKey,
-                                unsigned char *chain)
-{
-    sys_os_perso_derive_node_bip32(curve, path, pathLength, privateKey, chain);
-}
-
 cx_err_t cx_bn_add(cx_bn_t r, const cx_bn_t a, const cx_bn_t b)
 {
     return sys_cx_bn_add(r, a, b);
