@@ -30,9 +30,7 @@ class Btc:
         assert message.WhichOneof("request") == "get_version"
         return message.SerializeToString()
 
-    def get_version_parse_response(self, data: Optional[bytes]):
-        response = Response()
-        response.ParseFromString(data)
+    def get_version_parse_response(self, response):
         assert response.WhichOneof("response") == "get_version"
         print(f"version: {response.get_version.version}")
         return
@@ -44,9 +42,7 @@ class Btc:
         assert message.WhichOneof("request") == "get_master_fingerprint"
         return message.SerializeToString()
 
-    def get_master_fingerprint_parse_response(self, data: Optional[bytes]):
-        response = Response()
-        response.ParseFromString(data)
+    def get_master_fingerprint_parse_response(self, response):
         assert response.WhichOneof("response") == "get_master_fingerprint"
         fpr_hex = '{:08x}'.format(response.get_master_fingerprint.fingerprint)
         print(f"master fpr: {fpr_hex}")
@@ -66,9 +62,7 @@ class Btc:
         assert message.WhichOneof("request") == "get_extended_pubkey"
         return message.SerializeToString()
 
-    def get_extended_pubkey_parse_response(self, data: Optional[bytes]):
-        response = Response()
-        response.ParseFromString(data)
+    def get_extended_pubkey_parse_response(self, response):
         assert response.WhichOneof("response") == "get_extended_pubkey"
         print(f"pubkey: {response.get_extended_pubkey.pubkey}")
         return
@@ -102,9 +96,7 @@ class Btc:
         assert message.WhichOneof("request") == "register_wallet"
         return message.SerializeToString()
 
-    def register_wallet_parse_response(self, data: Optional[bytes]):
-        response = Response()
-        response.ParseFromString(data)
+    def register_wallet_parse_response(self, response):
         assert response.WhichOneof("response") == "register_wallet"
         print(f"id: {response.register_wallet.wallet_id}")
         print(f"hmac: {response.register_wallet.wallet_hmac}")
@@ -137,9 +129,7 @@ class Btc:
         assert message.WhichOneof("request") == "get_wallet_address"
         return message.SerializeToString()
 
-    def get_wallet_address_parse_response(self, data: Optional[bytes]):
-        response = Response()
-        response.ParseFromString(data)
+    def get_wallet_address_parse_response(self, response):
         assert response.WhichOneof("response") == "get_wallet_address"
         print(f"address: {response.get_wallet_address.address}")
         return
@@ -174,7 +164,7 @@ class Btc:
         assert message.WhichOneof("request") == "sign_psbt"
         return message.SerializeToString()
 
-    def sign_psbt_parse_response(self, data: Optional[bytes]):
+    def sign_psbt_parse_response(self, response):
         response = Response()
         response.ParseFromString(data)
         assert response.WhichOneof("response") == "sign_psbt"
@@ -252,8 +242,13 @@ if __name__ == "__main__":
         request = prepare_request(args)
 
         data: Optional[bytes] = streamer.exchange(request)
+        response = Response()
+        response.ParseFromString(data)
 
-        method_name = f"{action}_parse_response"
-        parse_response = getattr(btc, method_name)
+        if response.WhichOneof("response") == "error":
+            print(f"Error: {response.error.error_msg}")
+        else:
+            method_name = f"{action}_parse_response"
+            parse_response = getattr(btc, method_name)
 
-        parse_response(data)
+            parse_response(response)
