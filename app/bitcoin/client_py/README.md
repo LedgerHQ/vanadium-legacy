@@ -10,6 +10,6 @@ $ protoc -I=../src/message --python_out=. ../src/message/message.proto
 
 Run the VM on speculos, or on a device, then run the client with:
 
-$ ./bitcoin.py --speculos --app ./target/riscv32i-unknown-none-elf/release/vnd-bitcoin
+$ ./bitcoin.py --speculos --app ./target/riscv32imc-unknown-none-elf/release/vnd-bitcoin
 
 (remove `--speculos` if using a real device)

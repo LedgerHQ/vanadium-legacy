@@ -24,7 +24,7 @@ cargo build --release
 or, for the RISC-V target:
 
 ```console
-cargo build --release --target riscv32i-unknown-none-elf
+cargo build --release --target riscv32imc-unknown-none-elf
 ```
 
 ### Pre-requisites (system)

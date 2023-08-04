@@ -126,7 +126,7 @@ jobs:
       - name: Install Rust
         run: |
            rustup default nightly
-           rustup target add --toolchain=nightly riscv32i-unknown-none-elf
+           rustup target add --toolchain=nightly riscv32imc-unknown-none-elf
            rustup component add clippy
            rustup component add rustfmt
 
