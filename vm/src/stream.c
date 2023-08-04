@@ -428,24 +428,61 @@ static bool fit_in_page(uint32_t addr, size_t size)
 
 static bool get_instruction(const uint32_t addr, uint32_t *instruction)
 {
-    if (!fit_in_page(addr, sizeof(uint32_t))) {
-        return false;
+    // TODO: figure out how to simplify this
+    if ((addr & 0b11) == 0) {
+        if (!fit_in_page(addr, sizeof(uint32_t))) {
+            return false;
+        } else {
+            uint32_t page_addr = PAGE_START(addr);
+
+            struct page_s *page = get_code_page(page_addr);
+            if (page == NULL) {
+                // this shouldn't happen
+                return false;
+            }
+
+            uint32_t offset = addr - page_addr;
+            uint32_t value = *(uint32_t *)&page->data[offset];
+
+            *instruction = value;
+
+            return true;
+        }
+    } else {
+        // read is not aligned to a 4-byte boundary; read two 16-bit pieces separately
+        if (addr & 1) {
+            err("Instruction not aligned on 16-bit boundary\n");
+            return false;
+        }
+
+        uint32_t page_addr = PAGE_START(addr);
+
+        struct page_s *page = get_code_page(page_addr);
+        if (page == NULL) {
+            // this shouldn't happen
+            return false;
+        }
+
+        uint32_t offset = addr - page_addr;
+        uint16_t value_lo = *(uint16_t *)&page->data[offset];
+
+        uint32_t next_addr = addr + 2;
+
+        uint32_t next_page_addr = PAGE_START(next_addr);
+
+        struct page_s *next_page = get_code_page(next_page_addr); // likely the same page
+        if (next_page == NULL) {
+            // this shouldn't happen
+            return false;
+        }
+
+        uint32_t next_offset = next_addr - next_page_addr;
+        uint16_t value_hi = *(uint16_t *)&next_page->data[next_offset];
+
+        *instruction = ((uint32_t)value_hi << 16) + value_lo;
+
+        return true;
     }
-
-    uint32_t page_addr = PAGE_START(addr);
-
-    struct page_s *page = get_code_page(page_addr);
-    if (page == NULL) {
-        // this shouldn't happen
-        return false;
-    }
-
-    uint32_t offset = addr - page_addr;
-    uint32_t value = *(uint32_t *)&page->data[offset];
-
-    *instruction = value;
-
-    return true;
 }
 
 /**
@@ -497,7 +534,7 @@ bool mem_write(const uint32_t addr, const size_t size, const uint32_t value)
 
     page = get_page(addr, PAGE_PROT_RW);
     if (page == NULL) {
-        err("get_page failed\n");
+        err("get_page failed in mem_write\n");
         return false;
     }
     offset = addr - PAGE_START(addr);
@@ -549,17 +586,31 @@ uint8_t *get_buffer(const uintptr_t addr, const size_t size, const bool writeabl
     return &page->data[offset];
 }
 
-static void debug_cpu(uint32_t pc, uint32_t instruction)
+static void debug_cpu(const struct rv_cpu *cpu, uint32_t instruction)
 {
     char buf[19];
 
-    u32hex(pc, &buf[0]);
+    u32hex(cpu->pc, &buf[0]);
     buf[8] = ' ';
     u32hex(instruction, &buf[9]);
+
+    if ((instruction & 0b11) != 0b11) {
+        // compressed instruction, only print two bytes
+        for (int i = 9; i < 13; i++) {
+            buf[i] = ' ';
+        }
+    }
+
     buf[17] = '\n';
     buf[18] = '\x00';
 
     err(buf);
+
+    PRINTF("Registers: ");
+    for (int i = 0; i < 32; i++) {
+        PRINTF("%08x ", cpu->regs[i]);
+    }
+    PRINTF("\n");
 }
 
 void stream_run_app(void)
@@ -572,7 +623,7 @@ void stream_run_app(void)
             fatal("get_instruction failed\n");
         }
         if (0) {
-            debug_cpu(app.cpu.pc, instruction);
+            debug_cpu(&app.cpu, instruction);
         }
         stop = !rv_cpu_execute(&app.cpu, instruction);
         app_loading_inc_counter();

@@ -21,6 +21,91 @@ void rv_cpu_reset(struct rv_cpu *cpu)
 
 enum rv_op rv_cpu_decode(uint32_t inst)
 {
+    if ((inst & 0b11) != 0b11) {
+        // Compressed instructions
+        switch (inst & 0b11) {
+            case 0b00:
+                // Compressed instruction, quadrant 0
+                switch ((inst >> 13) & 0b111) {
+                    case 0b000: return RV_OP_C_ADDI4SPN;
+                    case 0b010: return RV_OP_C_LW;
+                    case 0b110: return RV_OP_C_SW;
+                    default: return RV_OP_UNKNOWN;
+                }
+                break;
+            case 0b01:
+                // Compressed instruction, quadrant 1
+                switch ((inst >> 13) & 0b111) {
+                    case 0b000: return RV_OP_C_ADDI;
+                    case 0b001: return RV_OP_C_JAL;
+                    case 0b010: return RV_OP_C_LI;
+                    case 0b011:
+                        switch ((inst >> 7) & 0b11111) {
+                            case 0b00010: return RV_OP_C_ADDI16SP;
+                            default: return RV_OP_C_LUI;
+                        }
+                        break;
+                    case 0b100:
+                        switch ((inst >> 10) & 0b11) {
+                            case 0b00: return RV_OP_C_SRLI;
+                            case 0b01: return RV_OP_C_SRAI;
+                            case 0b10: return RV_OP_C_ANDI;
+                            case 0b11:
+                                switch ((inst >> 5) & 0b11) {
+                                    case 0b00: return RV_OP_C_SUB;
+                                    case 0b01: return RV_OP_C_XOR;
+                                    case 0b10: return RV_OP_C_OR;
+                                    case 0b11: return RV_OP_C_AND;
+                                    default: return RV_OP_UNKNOWN;
+                                }
+                            default: return RV_OP_UNKNOWN;
+                        }
+                        break;
+                    case 0b101: return RV_OP_C_J;
+                    case 0b110: return RV_OP_C_BEQZ;
+                    case 0b111: return RV_OP_C_BNEZ;
+                    default: return RV_OP_UNKNOWN;
+                }
+                break;
+            case 0b10:
+                // Compressed instruction, quadrant 2
+                switch ((inst >> 13) & 0b111) {
+                    case 0b000:
+                        switch ((inst >> 7) & 0b11111) {
+                            case 0: return RV_OP_UNKNOWN;
+                            default: return RV_OP_C_SLLI;
+                        }
+                    case 0b010:
+                        switch ((inst >> 7) & 0b11111) {
+                            case 0: return RV_OP_UNKNOWN;
+                            default: return RV_OP_C_LWSP;
+                        }
+                    case 0b100:
+                        switch ((inst >> 12) & 0b1) {
+                        case 0b0:
+                            switch ((inst >> 2) & 0b11111) {
+                                case 0b00000: return RV_OP_C_JR;
+                                default: return RV_OP_C_MV;
+                            }
+                        case 0b1:
+                            switch ((inst >> 2) & 0b11111) {
+                                case 0b00000:
+                                    switch ((inst >> 7) & 0b11111) {
+                                        case 0b00000: return RV_OP_C_EBREAK;
+                                        default: return RV_OP_C_JALR;
+                                    }
+                                default: return RV_OP_C_ADD;
+                            }
+                        }
+                    case 0b110: return RV_OP_C_SWSP;
+                    default: return RV_OP_UNKNOWN;
+                }
+                break;
+            default: return RV_OP_UNKNOWN;
+        }
+    }
+
+    // uncompressed instruction
     switch (inst & 0x0000007f) {
         case 0x00000037: return RV_OP_LUI;
         case 0x00000017: return RV_OP_AUIPC;
@@ -172,7 +257,6 @@ bool rv_cpu_execute(struct rv_cpu *cpu, uint32_t instruction)
     uint32_t pc_inc = INST_SIZE;
     uint32_t pc_set = cpu->pc;
     bool success = true;
-    uint32_t value;
 
     switch (op) {
         case RV_OP_ADD:
@@ -295,45 +379,55 @@ bool rv_cpu_execute(struct rv_cpu *cpu, uint32_t instruction)
             pc_inc = cpu->regs[inst.rs1] >= cpu->regs[inst.rs2] ? imm_b(inst) : INST_SIZE;
             break;
 
-        case RV_OP_LB:
+        case RV_OP_LB: {
+            uint32_t value;
             if (mem_read(cpu->regs[inst.rs1] + (int32_t) imm_i(inst), 1, &value)) {
                 cpu->regs[inst.rd] = sign_extend_b(value);
             } else {
                 success = false;
             }
             break;
+        }
 
-        case RV_OP_LH:
+        case RV_OP_LH: {
+            uint32_t value;
             if (mem_read(cpu->regs[inst.rs1] + (int32_t) imm_i(inst), 2, &value)) {
                 cpu->regs[inst.rd] = sign_extend_h(value);
             } else {
                 success = false;
             }
             break;
+        }
 
-        case RV_OP_LW:
+        case RV_OP_LW: {
+            uint32_t value;
             if (mem_read(cpu->regs[inst.rs1] + (int32_t) imm_i(inst), 4, &value)) {
                 cpu->regs[inst.rd] = value;
             } else {
                 success = false;
             }
             break;
+        }
 
-        case RV_OP_LBU:
+        case RV_OP_LBU: {
+            uint32_t value;
             if (mem_read(cpu->regs[inst.rs1] + (int32_t) imm_i(inst), 1, &value)) {
                 cpu->regs[inst.rd] = value;
             } else {
                 success = false;
             }
             break;
+        }
 
-        case RV_OP_LHU:
+        case RV_OP_LHU: {
+            uint32_t value;
             if (mem_read(cpu->regs[inst.rs1] + (int32_t) imm_i(inst), 2, &value)) {
                 cpu->regs[inst.rd] = value;
             } else {
                 success = false;
             }
             break;
+        }
 
         case RV_OP_SB:
             if (!mem_write(cpu->regs[inst.rs1] + (int32_t) imm_s(inst), 1, cpu->regs[inst.rs2])) {
@@ -362,11 +456,11 @@ bool rv_cpu_execute(struct rv_cpu *cpu, uint32_t instruction)
             break;
 
         case RV_OP_MULH:
-            cpu->regs[inst.rd] = (u64)((i64)cpu->regs[inst.rs1] * (i64)cpu->regs[inst.rs2]) >> 32;
+            cpu->regs[inst.rd] = (uint32_t)(((int64_t)(int32_t)cpu->regs[inst.rs1] * (int32_t)cpu->regs[inst.rs2]) >> 32);
             break;
 
         case RV_OP_MULHSU:
-            cpu->regs[inst.rd] = (u64)((i64)cpu->regs[inst.rs1] * (u64)cpu->regs[inst.rs2]) >> 32;
+            cpu->regs[inst.rd] = (uint32_t)(((int64_t)(int32_t)cpu->regs[inst.rs1] * cpu->regs[inst.rs2]) >> 32);
             break;
 
         case RV_OP_MULHU:
@@ -374,11 +468,12 @@ bool rv_cpu_execute(struct rv_cpu *cpu, uint32_t instruction)
             break;
 
         case RV_OP_DIV:
-            if ((cpu->regs[inst.rs2] != 0) &&
-                !((int32_t)cpu->regs[inst.rs1] == INT_MIN && cpu->regs[inst.rs2] == UINT_MAX)) {
-                cpu->regs[inst.rd] = (int32_t)cpu->regs[inst.rs1] / (int32_t)cpu->regs[inst.rs2];
-            } else {
+            if (cpu->regs[inst.rs2] == 0) {
                 cpu->regs[inst.rd] = 0xffffffff;
+            } else if (cpu->regs[inst.rs1] == (1U << 31) && cpu->regs[inst.rs2] == 0xffffffff) {
+                cpu->regs[inst.rd] = cpu->regs[inst.rs1];
+            } else {
+                cpu->regs[inst.rd] = (int32_t)cpu->regs[inst.rs1] / (int32_t)cpu->regs[inst.rs2];
             }
             break;
 
@@ -390,22 +485,252 @@ bool rv_cpu_execute(struct rv_cpu *cpu, uint32_t instruction)
             }
             break;
 
-            /*case RV_OP_REM:
-            cpu->regs[inst.rd] = ;
-            break;*/
+        case RV_OP_REM:
+            if (cpu->regs[inst.rs2] == 0) {
+                cpu->regs[inst.rd] = cpu->regs[inst.rs1];
+            } else if (cpu->regs[inst.rs1] == (1U << 31) && cpu->regs[inst.rs2] == 0xffffffff) {
+                cpu->regs[inst.rd] = 0;
+            } else {
+                cpu->regs[inst.rd] = (int32_t)cpu->regs[inst.rs1] % (int32_t)cpu->regs[inst.rs2];
+            }
+            break;
 
         case RV_OP_REMU:
             if (cpu->regs[inst.rs2] != 0) {
                 cpu->regs[inst.rd] = cpu->regs[inst.rs1] % cpu->regs[inst.rs2];
             } else {
-                cpu->regs[inst.rd] = cpu->regs[inst.rs1] = cpu->regs[inst.rs2];
+                cpu->regs[inst.rd] = cpu->regs[inst.rs1];
             }
             break;
+
+        // start of compressed instructions
+        case RV_OP_C_ADDI4SPN: {
+            int32_t imm = c_nzuimm(inst.inst);
+            if (imm != 0) {
+                cpu->regs[rp(inst.c.iw.rdp)] = cpu->regs[2] + imm;
+            } else {
+                // illegal
+                success = false;
+            }
+
+            pc_inc = INST_SIZE / 2;
+            break;
+        }
+
+        case RV_OP_C_ADDI16SP: {
+            int32_t imm = sext(get_field1(inst.inst, 12, 9, 9) |
+                               get_field1(inst.inst, 6, 4, 4) |
+                               get_field1(inst.inst, 5, 6, 6) |
+                               get_field1(inst.inst, 3, 7, 8) |
+                               get_field1(inst.inst, 2, 5, 5), 10);
+
+            cpu->regs[2] += imm;
+
+            pc_inc = INST_SIZE / 2;
+            break;
+        }
+
+        case RV_OP_C_LW: {
+            // CL format
+            uint32_t addr = cpu->regs[rp(inst.c.l.rsp)] + (i32)cl_offset(inst.inst);
+            uint32_t value;
+
+            if (mem_read(addr, 4, &value)) {
+                cpu->regs[rp(inst.c.l.rdp)] = value;
+            } else {
+                success = false;
+            }
+            pc_inc = INST_SIZE / 2;
+            break;
+        }
+
+        case RV_OP_C_SW: {
+            // CS format
+            uint32_t addr = cpu->regs[rp(inst.c.s.rs1p)] + (i32)cs_offset(inst.inst);
+            uint32_t value = cpu->regs[rp(inst.c.s.rs2p)];
+            if (!mem_write(addr, 4, value)) {
+                success = false;
+            }
+            pc_inc = INST_SIZE / 2;
+            break;
+        }
+
+        case RV_OP_C_ADDI: // also including OP_C_NOP 
+            // CI format
+            if (inst.c.i.rd != 0) {
+                cpu->regs[inst.c.i.rd] += sext(ci_imm(inst.inst), 6);
+            }
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_J:
+            // CJ format
+            pc_inc = sext(cj_offset(inst.inst), 12);
+            break;
+
+        case RV_OP_C_JAL:
+            // CJ format
+            pc_inc = sext(cj_offset(inst.inst), 12);
+            cpu->regs[1] = cpu->pc + INST_SIZE/2;
+            break;
+
+        case RV_OP_C_LI:
+            // CI format
+            if (inst.c.i.rd != 0) {
+                cpu->regs[inst.c.i.rd] = sext(ci_imm(inst.inst), 6);
+            }
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_LUI: {
+            // CI format
+            uint32_t imm = sext(get_field1(inst.inst, 12, 17, 17) | get_field1(inst.inst, 2, 12, 16), 18);
+            if (imm != 0) {
+                cpu->regs[inst.c.i.rd] = imm;
+            } else {
+                // illegal
+                success = false;
+            }
+            pc_inc = INST_SIZE / 2;
+            break;
+        }
+
+        case RV_OP_C_SLLI:
+            // CI format
+            cpu->regs[inst.c.i.rd] = cpu->regs[inst.c.i.rd] << (ci_imm(inst.inst) & MOD_32);
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_SRLI:
+            // CB format
+            cpu->regs[rp(inst.c.b.rs1p)] = cpu->regs[rp(inst.c.b.rs1p)] >> (ci_imm(inst.inst) & MOD_32);
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_SRAI:
+            // CB format
+            cpu->regs[rp(inst.c.b.rs1p)] = (uint32_t) ((int32_t) cpu->regs[rp(inst.c.b.rs1p)] >> (ci_imm(inst.inst) & MOD_32));
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_ANDI:
+            // CB format
+            cpu->regs[rp(inst.c.b.rs1p)] &= sext(cb_imm(inst.inst), 6);
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_ADD:
+            // CR format
+            cpu->regs[inst.c.r.rs1] = cpu->regs[inst.c.r.rs1] + cpu->regs[inst.c.r.rs2];
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_SUB:
+            // CA format
+            cpu->regs[rp(inst.c.a.rs1p)] = cpu->regs[rp(inst.c.a.rs1p)] - cpu->regs[rp(inst.c.a.rs2p)];
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_XOR:
+            // CA format
+            cpu->regs[rp(inst.c.a.rs1p)] = cpu->regs[rp(inst.c.a.rs1p)] ^ cpu->regs[rp(inst.c.a.rs2p)];
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_OR:
+            // CA format
+            cpu->regs[rp(inst.c.a.rs1p)] = cpu->regs[rp(inst.c.a.rs1p)] | cpu->regs[rp(inst.c.a.rs2p)];
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_AND:
+            // CA format
+            cpu->regs[rp(inst.c.a.rs1p)] = cpu->regs[rp(inst.c.a.rs1p)] & cpu->regs[rp(inst.c.a.rs2p)];
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_JR:
+            // CR format
+            if (inst.c.r.rs1 != 0) {
+                pc_set = cpu->regs[inst.c.r.rs1];
+                pc_inc = 0;
+            } else {
+                success = false;
+                pc_inc = INST_SIZE / 2;
+            }
+            break;
+
+        case RV_OP_C_JALR:
+            // CR format
+            if (inst.c.r.rs1 != 0) {
+                pc_set = cpu->regs[inst.c.r.rs1];
+                pc_inc = 0;
+                cpu->regs[1] = cpu->pc + INST_SIZE / 2;
+            } else {
+                success = false;
+                pc_inc = INST_SIZE / 2;
+            }
+            break;
+
+        case RV_OP_C_BEQZ:
+            // CB format
+            if (cpu->regs[rp(inst.c.b.rs1p)] == 0) {
+                pc_inc = (uint32_t)sext(cb_offset(inst.inst), 9);
+            } else {
+                pc_inc = INST_SIZE / 2;
+            }
+            break;
+
+        case RV_OP_C_BNEZ:
+            // CB format
+            if (cpu->regs[rp(inst.c.b.rs1p)] != 0) {
+                pc_inc = (uint32_t)sext(cb_offset(inst.inst), 9);
+            } else {
+                pc_inc = INST_SIZE / 2;
+            }
+            break;
+
+        case RV_OP_C_LWSP: {
+            // CI format
+            uint32_t imm = get_field1(inst.inst, 4, 2, 4)
+                         | get_field1(inst.inst, 2, 6, 7)
+                         | get_field1(inst.inst, 12, 5, 5);
+
+            uint32_t addr = cpu->regs[2] + imm;
+            uint32_t value;
+            if (mem_read(addr, 4, &value)) {
+                cpu->regs[inst.c.i.rd] = value; // rd from the decoded instruction
+            } else {
+                success = false;
+            }
+            pc_inc = INST_SIZE / 2;
+            break;
+        }
+
+        case RV_OP_C_MV:
+            // CR format
+            cpu->regs[inst.c.r.rs1] = cpu->regs[inst.c.r.rs2];
+            pc_inc = INST_SIZE / 2;
+            break;
+
+        case RV_OP_C_SWSP: {
+            // CSS format
+            uint32_t imm = get_field1(inst.inst, 9, 2, 5) | get_field1(inst.inst, 7, 6, 7);
+            uint32_t addr = cpu->regs[2] + imm;
+            if (!mem_write(addr, 4, cpu->regs[inst.c.ss.rs2])) {
+                success = false;
+            }
+            pc_inc = INST_SIZE / 2;
+            break;
+        }
+
+        // end of compressed instructions
 
         case RV_OP_FENCE:
         case RV_OP_FENCE_TSO:
         case RV_OP_PAUSE:
         case RV_OP_EBREAK:
+        case RV_OP_C_EBREAK:
         default:
             fatal("instruction not implemented\n");
             success = false;

@@ -22,12 +22,6 @@ cx_err_t cx_ecfp_add_point_no_throw(cx_curve_t curve, uint8_t *R, const uint8_t 
 
 cx_err_t cx_ecfp_scalar_mult_no_throw(cx_curve_t curve, uint8_t *P, const uint8_t *k, size_t k_len);
 
-void os_perso_derive_node_bip32(cx_curve_t curve,
-                                const unsigned int *path,
-                                unsigned int pathLength,
-                                unsigned char *privateKey,
-                                unsigned char *chain);
-
 unsigned long sys_cx_ecfp_init_public_key(cx_curve_t curve,
                                           const unsigned char *rawkey,
                                           unsigned int key_len,
@@ -285,16 +279,10 @@ unsigned long sys_os_perso_derive_node_bip32(cx_curve_t curve,
                                              uint8_t *private_key,
                                              uint8_t *chain);
 
-static inline bool os_perso_derive_node_bip32_nt(cx_curve_t curve,
-                                                 const uint32_t *path,
-                                                 size_t pathLength,
-                                                 uint8_t *privateKey,
-                                                 uint8_t *chain)
-{
-    sys_os_perso_derive_node_bip32(curve, path, pathLength, privateKey, chain);
-
-    /* XXX: speculos exits if an error is encountered */
-    return true;
-}
+void os_perso_derive_node_bip32(cx_curve_t curve,
+                                const unsigned int *path,
+                                unsigned int pathLength,
+                                unsigned char *privateKey,
+                                unsigned char *chain);
 
 unsigned long sys_cx_hash(cx_hash_t *hash, int mode, const uint8_t *in, size_t len, uint8_t *out, size_t out_len);

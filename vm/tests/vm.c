@@ -4,6 +4,10 @@
  * The goal is to run unit tests for the RISC-V processor to ensure that the
  * instructions implementation (from the streaming VM) is correct.
  *
+ * Compile this with:
+ *
+ *   cmake -Bbuild -H. && make -j -C build/
+ * 
  * The tests from https://github.com/riscv-software-src/riscv-tests can be built
  * with the following command-line:
  *
@@ -11,8 +15,15 @@
  *   -fvisibility=hidden -nostdlib -nostartfiles -I/usr/local/riscv32-unknown-linux-gnu/include/'
  *   XLEN=32 make -j -B
  *
+ * TODO: this command line worked for me instead:
+ *   RISCV_PREFIX=riscv64-unknown-elf- RISCV_GCC_OPTS='-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles' XLEN=32 make -j -B
+ *
  * The patch env.diff should be applied against the git sub-module
  * https://github.com/riscv-software-src/riscv-tests first.
+ * TODO: the patch is outdated.
+ *
+ * TODO: tests for c.lw, c.sw, c.lwsp and c.swsp don't work; it seems a memory
+ * management problem in the test vm setup.
  *
  * find riscv-tests/isa/ -name '*-p-*' | grep -v '\.dump' | while read l; do (echo $l;
  * ./build/vm "$l"); done

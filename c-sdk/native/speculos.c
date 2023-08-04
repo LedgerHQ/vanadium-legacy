@@ -287,3 +287,11 @@ void os_longjmp(unsigned int exception)
     fprintf(stderr, "This shouldn't never happen, there's a bug somewhere\n");
     exit(1);
 }
+
+void os_perso_derive_node_bip32(cx_curve_t curve,
+                                const unsigned int *path,
+                                unsigned int pathLength,
+                                unsigned char *privateKey,
+                                unsigned char *chain) {
+    sys_os_perso_derive_node_bip32(curve, path, pathLength, privateKey, chain);
+}

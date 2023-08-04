@@ -3,7 +3,6 @@
 #include "ecall.h"
 #include "ecall_hash.h"
 #include "error.h"
-#include "no_throw.h"
 #include "page.h"
 #include "uint256-internal.h"
 
@@ -36,10 +35,10 @@ bool sys_derive_node_bip32(eret_t *eret, cx_curve_t curve, guest_pointer_t p_pat
         return false;
     }
 
-    if (!os_perso_derive_node_bip32_nt(curve, path, path_count, private_key, chain)) {
-        eret->success = false;
-        return true;
-    }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    os_perso_derive_node_bip32(curve, path, path_count, private_key, chain);
+#pragma GCC diagnostic pop
 
     if (p_private_key.addr != 0) {
         if (!copy_host_buffer(p_private_key, &private_key, sizeof(private_key))) {
@@ -327,14 +326,15 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
 
     int ret = 0;
 
-    // TODO: no exception handling (unsupported when compiling natively)
-
     // derive the seed with bip32_path
-    os_perso_derive_node_bip32_nt(CX_CURVE_256K1,
-                                  (const uint32_t[]){},
-                                  0,
-                                  raw_private_key,
-                                  chain_code);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    os_perso_derive_node_bip32(CX_CURVE_256K1,
+                               (const uint32_t[]){},
+                               0,
+                               raw_private_key,
+                               chain_code);
+#pragma GCC diagnostic pop
 
     // new private_key from raw
     ret = cx_ecfp_init_private_key_no_throw(CX_CURVE_256K1,
