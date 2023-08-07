@@ -5,8 +5,12 @@ import os
 import sys
 import json
 import base64
+import shlex
+import time
 
-import argparse
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import Completer, Completion
+
 from argparse import ArgumentParser
 from typing import Optional
 
@@ -22,8 +26,16 @@ import stream  # noqa: E402
 logging.basicConfig(filename='bitcoin.log', level=logging.DEBUG)
 
 
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+
+# TODO: separate BTC class from the cli
 class Btc:
-    def get_version_prepare_request(self, args: argparse.Namespace):
+    def get_version_prepare_request(self, args: dotdict):
         get_version = RequestGetVersion()
         message = Request()
         message.get_version.CopyFrom(get_version)
@@ -35,7 +47,7 @@ class Btc:
         print(f"version: {response.get_version.version}")
         return
 
-    def get_master_fingerprint_prepare_request(self, args: argparse.Namespace):
+    def get_master_fingerprint_prepare_request(self, args: dotdict):
         get_master_fingerprint = RequestGetMasterFingerprint()
         message = Request()
         message.get_master_fingerprint.CopyFrom(get_master_fingerprint)
@@ -48,13 +60,12 @@ class Btc:
         print(f"master fpr: {fpr_hex}")
         return
 
-    def get_extended_pubkey_prepare_request(self, args: argparse.Namespace):
+    def get_extended_pubkey_prepare_request(self, args: dotdict):
         if args.path is None:
-            print("Missing --path argument")
-            sys.exit()
+            raise ValueError("Missing 'path' argument")
 
         get_extended_pubkey = RequestGetExtendedPubkey()
-        get_extended_pubkey.display = args.display
+        get_extended_pubkey.display = args.get("display", False)
         get_extended_pubkey.bip32_path.extend(bip32_path_to_list(args.path))
         message = Request()
         message.get_extended_pubkey.CopyFrom(get_extended_pubkey)
@@ -67,24 +78,20 @@ class Btc:
         print(f"pubkey: {response.get_extended_pubkey.pubkey}")
         return
 
-    def register_wallet_prepare_request(self, args: argparse.Namespace):
+    def register_wallet_prepare_request(self, args: dotdict):
         if args.name == "":
-            print("Missing or empty --name argument")
-            sys.exit()
+            raise ValueError("Missing or empty --name argument")
 
         if args.descriptor_template is None:
-            print("Missing --descriptor_template argument")
-            sys.exit()
+            raise ValueError("Missing --descriptor_template argument")
 
         if args.keys_info is None:
-            print("Missing --keys_info")
-            sys.exit()
+            raise ValueError("Missing --keys_info")
 
         try:
             keys_info = json.loads(args.keys_info)
         except json.decoder.JSONDecodeError:
-            print("key_info is not valid JSON")
-            sys.exit()
+            raise RuntimeError("key_info is not valid JSON")
 
         register_wallet = RequestRegisterWallet()
         register_wallet.name = args.name
@@ -102,27 +109,24 @@ class Btc:
         print(f"hmac: {response.register_wallet.wallet_hmac}")
         return
 
-    def get_wallet_address_prepare_request(self, args: argparse.Namespace):
+    def get_wallet_address_prepare_request(self, args: dotdict):
         if args.descriptor_template is None:
-            print("Missing --descriptor_template argument")
-            sys.exit()
+            raise ValueError("Missing --descriptor_template argument")
 
         if args.keys_info is None:
-            print("Missing --keys_info")
-            sys.exit()
+            raise ValueError("Missing --keys_info")
 
         try:
             keys_info = json.loads(args.keys_info)
         except json.decoder.JSONDecodeError:
-            print("key_info is not valid JSON")
-            sys.exit()
+            raise RuntimeError("key_info is not valid JSON")
 
         get_wallet_address = RequestGetWalletAddress()
-        get_wallet_address.name = args.name
+        get_wallet_address.name = args.get("name", "")
         get_wallet_address.descriptor_template = args.descriptor_template
         get_wallet_address.keys_info.extend(keys_info)
-        get_wallet_address.change = args.change
-        get_wallet_address.address_index = args.address_index
+        get_wallet_address.change = int(args.get("change", "0"))
+        get_wallet_address.address_index = int(args.get("address_index", "0"))
         message = Request()
         message.get_wallet_address.CopyFrom(get_wallet_address)
 
@@ -134,27 +138,23 @@ class Btc:
         print(f"address: {response.get_wallet_address.address}")
         return
 
-    def sign_psbt_prepare_request(self, args: argparse.Namespace):
+    def sign_psbt_prepare_request(self, args: dotdict):
         if args.psbt is None:
-            print("Missing --psbt argument")
-            sys.exit()
+            raise ValueError("Missing --psbt argument")
 
         if args.descriptor_template is None:
-            print("Missing --descriptor_template argument")
-            sys.exit()
+            raise ValueError("Missing --descriptor_template argument")
 
         if args.keys_info is None:
-            print("Missing --keys_info")
-            sys.exit()
+            raise ValueError("Missing --keys_info")
 
         try:
             keys_info = json.loads(args.keys_info)
         except json.decoder.JSONDecodeError:
-            print("key_info is not valid JSON")
-            sys.exit()
+            raise ValueError("key_info is not valid JSON")
 
         sign_psbt = RequestSignPsbt()
-        sign_psbt.name = args.name
+        sign_psbt.name = args.get("name", "")
         sign_psbt.descriptor_template = args.descriptor_template
         sign_psbt.keys_info.extend(keys_info)
         sign_psbt.psbt = base64.b64decode(args.psbt)
@@ -178,77 +178,99 @@ class Btc:
         return
 
 
+class ActionArgumentCompleter(Completer):
+    ACTION_ARGUMENTS = {
+        "get_version": [],
+        "get_master_fingerprint": [],
+        "get_extended_pubkey": ["display", "path="],
+        "register_wallet": ["name=", "descriptor_template=", "keys_info="],
+        "get_wallet_address": ["name=", "descriptor_template=", "keys_info=", "change=", "address_index="],
+        "sign_psbt": ["name=", "descriptor_template=", "keys_info=", "psbt="],
+    }
+
+    def get_completions(self, document, complete_event):
+        word_before_cursor = document.get_word_before_cursor(WORD=True)
+
+        if ' ' not in document.text:
+            # user is typing the action
+            for action in self.ACTION_ARGUMENTS.keys():
+                if action.startswith(word_before_cursor):
+                    yield Completion(action, start_position=-len(word_before_cursor))
+        else:
+            # user is typing an argument, find which are valid
+            action = document.text.split()[0]
+            for argument in self.ACTION_ARGUMENTS.get(action, []):
+                if argument not in document.text and argument.startswith(word_before_cursor):
+                    yield Completion(argument, start_position=-len(word_before_cursor))
+
+
 if __name__ == "__main__":
     parser: ArgumentParser = stream.get_stream_arg_parser()
-
-    exclusive_group = parser.add_mutually_exclusive_group(required=True)
-
-    exclusive_group.add_argument("--get_version",
-                                 help='Get application version',
-                                 action='store_true')
-    exclusive_group.add_argument("--get_master_fingerprint",
-                                 help='Get the fingerprint of the master public key',
-                                 action='store_true')
-    exclusive_group.add_argument("--get_extended_pubkey",
-                                 help='Get an extended pubkey at a given path',
-                                 action='store_true')
-    exclusive_group.add_argument("--register_wallet",
-                                 help='Register a wallet policy',
-                                 action='store_true')
-    exclusive_group.add_argument("--get_wallet_address",
-                                 help='Get the address for a wallet',
-                                 action='store_true')
-    exclusive_group.add_argument("--sign_psbt",
-                                 help='Sign a psbt with a policy',
-                                 action='store_true')
-
-    # TODO: should only enable arguments for the right command
-    parser.add_argument('--path', help='A BIP-32 path')
-    parser.add_argument(
-        '--display', help='Set if the user should validate the action on-screen', action='store_true')
-
-    parser.add_argument(
-        '--name', help='The name of a wallet policy', default="")
-    parser.add_argument('--descriptor_template', help='A descriptor template')
-    parser.add_argument(
-        '--keys_info', help='the keys information, as a json-encoded array of strings')
-
-    parser.add_argument('--change', type=bool,
-                        help='If present, request a change address', default=False)
-    parser.add_argument('--address_index', type=int,
-                        help='The address index', default=0)
-
-    parser.add_argument('--psbt', help='A base64-encoded PSBT')
-
     args = parser.parse_args()
 
     actions = ["get_version", "get_master_fingerprint", "get_extended_pubkey",
                "register_wallet", "get_wallet_address", "sign_psbt"]
-    action = None
-    for act in actions:
-        if getattr(args, act) is True:
-            action = act
 
-    if action is None:
-        print("No action or invalid action")
-        sys.exit(1)
+    completer = ActionArgumentCompleter()
 
     with stream.get_streamer(args) as streamer:
+
         btc = Btc()
 
-        method_name = f"{action}_prepare_request"
-        prepare_request = getattr(btc, method_name)
+        # Run get_version to make sure the app starts
+        streamer.exchange(btc.get_version_prepare_request(dotdict({})))
 
-        request = prepare_request(args)
+        last_command_time = None
+        while True:
+            input_line = prompt("₿ ", completer=completer)
 
-        data: Optional[bytes] = streamer.exchange(request)
-        response = Response()
-        response.ParseFromString(data)
+            # Split into a command and the list of arguments
+            try:
+                input_line_list = shlex.split(input_line)
+            except ValueError as e:
+                print(f"Invalid command: {str(e)}")
+                continue
 
-        if response.WhichOneof("response") == "error":
-            print(f"Error: {response.error.error_msg}")
-        else:
-            method_name = f"{action}_parse_response"
-            parse_response = getattr(btc, method_name)
+            # Ensure input_line_list is not empty
+            if input_line_list:
+                action = input_line_list[0]
+            else:
+                print("Invalid command")
+                continue
 
-            parse_response(response)
+            # Get the necessary arguments from input_command_list
+            args_dict = dotdict({})
+            for item in input_line_list[1:]:
+                key, value = item.split('=')
+                args_dict[key] = value
+
+            if action == "time":
+                print("Runtime of last command:", last_command_time)
+                continue
+
+            if action not in actions:
+                print("Invalid action")
+                continue
+
+            try:
+                method_name = f"{action}_prepare_request"
+                prepare_request = getattr(btc, method_name)
+
+                request = prepare_request(args_dict)
+
+                time_start = time.time()
+                data: Optional[bytes] = streamer.exchange(request)
+                last_command_time = time.time() - time_start
+
+                response = Response()
+                response.ParseFromString(data)
+
+                if response.WhichOneof("response") == "error":
+                    print(f"Error: {response.error.error_msg}")
+                else:
+                    method_name = f"{action}_parse_response"
+                    parse_response = getattr(btc, method_name)
+
+                    parse_response(response)
+            except Exception as e:
+                print(f"An error occurred: {str(e)}")
