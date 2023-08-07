@@ -6,6 +6,7 @@ import sys
 import json
 import base64
 import shlex
+import time
 
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import Completer, Completion
@@ -219,6 +220,7 @@ if __name__ == "__main__":
         # Run get_version to make sure the app starts
         streamer.exchange(btc.get_version_prepare_request(dotdict({})))
 
+        last_command_time = None
         while True:
             input_line = prompt("₿ ", completer=completer)
 
@@ -242,6 +244,10 @@ if __name__ == "__main__":
                 key, value = item.split('=')
                 args_dict[key] = value
 
+            if action == "time":
+                print("Runtime of last command:", last_command_time)
+                continue
+
             if action not in actions:
                 print("Invalid action")
                 continue
@@ -252,8 +258,10 @@ if __name__ == "__main__":
 
                 request = prepare_request(args_dict)
 
-                # TODO: measure time of requests
+                time_start = time.time()
                 data: Optional[bytes] = streamer.exchange(request)
+                last_command_time = time.time() - time_start
+
                 response = Response()
                 response.ParseFromString(data)
 
