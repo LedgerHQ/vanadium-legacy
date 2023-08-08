@@ -251,6 +251,41 @@ impl CtxSha512 {
 
         digest
     }
+
+    pub fn hash(input: &[u8]) -> [u8; 64] {
+        let mut h = Self::new();
+        h.update(input);
+        h.r#final()
+    }
+}
+
+// adapted from https://github.com/jedisct1/rust-hmac-sha512
+pub fn hmac_sha512<T: AsRef<[u8]>, U: AsRef<[u8]>>(k: T, input: U) -> [u8; 64] {
+    let input = input.as_ref();
+    let k = k.as_ref();
+    let mut hk = [0u8; 64];
+    let k2 = if k.len() > 128 {
+        hk.copy_from_slice(&CtxSha512::hash(k));
+        &hk
+    } else {
+        k
+    };
+    let mut ih = CtxSha512::new();
+    let mut padded = [0x36; 128];
+    for (p, &k) in padded.iter_mut().zip(k2.iter()) {
+        *p ^= k;
+    }
+    ih.update(&padded[..]);
+    ih.update(input);
+
+    let mut oh = CtxSha512::new();
+    padded = [0x5c; 128];
+    for (p, &k) in padded.iter_mut().zip(k2.iter()) {
+        *p ^= k;
+    }
+    oh.update(&padded[..]);
+    oh.update(&ih.r#final()[..]);
+    oh.r#final()
 }
 
 pub fn derive_node_bip32(
@@ -462,6 +497,14 @@ mod tests {
             CtxSha512::new().update(b"Hello").r#final(),
             hex!("3615f80c9d293ed7402687f94b22d58e529b8cc7916f8fac7fddf7fbd5af4cf777d3d795a7a00a16bf7e7f3fb9561ee9baae480da9fe7a18769e71886b03f315")
         );
+    }
+
+    #[test]
+    fn test_hmac_sha512() {
+        assert_eq!(
+            hmac_sha512(&[42u8; 50], &[69u8; 250]),
+            hex!("7a6fbbf14ac2166a5fce50d74bcf0b4e255e7d6e7d2afe67e01570f7e9e524c83aeed39c79e70fca805a7eb3bc25c26adfda2dd3955b83e275b8af55e0c552af")
+        )
     }
 
     #[test]
