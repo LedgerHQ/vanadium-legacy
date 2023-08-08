@@ -10,6 +10,7 @@ import time
 
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.history import FileHistory
 
 from argparse import ArgumentParser
 from typing import Optional
@@ -212,6 +213,8 @@ if __name__ == "__main__":
                "register_wallet", "get_wallet_address", "sign_psbt"]
 
     completer = ActionArgumentCompleter()
+    # Create a history object
+    history = FileHistory('.cli-history')
 
     with stream.get_streamer(args) as streamer:
 
@@ -222,7 +225,7 @@ if __name__ == "__main__":
 
         last_command_time = None
         while True:
-            input_line = prompt("₿ ", completer=completer)
+            input_line = prompt("₿ ", history=history, completer=completer)
 
             # Split into a command and the list of arguments
             try:
