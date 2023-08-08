@@ -51,6 +51,7 @@ pub enum CxCurve {
     Secp256r1 = 0x22,
 }
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct EcfpPublicKey {
     curve: CxCurve,
@@ -58,6 +59,7 @@ pub struct EcfpPublicKey {
     w: [u8; 65],
 }
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct EcfpPrivateKey {
     curve: CxCurve,
@@ -65,6 +67,7 @@ pub struct EcfpPrivateKey {
     d: [u8; 32],
 }
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub union CtxHashGuest {
     ripemd160: *mut CtxRipeMd160,
@@ -73,6 +76,7 @@ pub union CtxHashGuest {
     sha512: *mut CtxSha512,
 }
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub enum CxHashId {
     HashIdRipeMd160,
@@ -380,6 +384,19 @@ impl EcfpPublicKey {
         ecfp_generate_keypair(curve, &mut pubkey, &mut privkey, true)?;
         Ok(pubkey)
     }
+
+    pub fn from_privkey(priv_key: &EcfpPrivateKey) -> Result<Self, SdkError> {
+        // ecfp_generate_keypair needs to borrow mutably
+        // (even if it doesn't really modify the priv_key if keep_privkey is true)
+        let mut priv_key_clone = priv_key.clone();
+
+        let mut pubkey = EcfpPublicKey::new(CxCurve::Secp256k1, &[0; 65]);
+
+        ecfp_generate_keypair(priv_key.curve, &mut pubkey, &mut priv_key_clone, true)?;
+
+        Ok(pubkey)
+    }
+
 }
 
 impl EcfpPrivateKey {

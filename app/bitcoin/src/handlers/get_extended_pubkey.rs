@@ -1,7 +1,7 @@
 use alloc::borrow::Cow;
 use alloc::format;
 use alloc::vec::Vec;
-use vanadium_sdk::crypto::{derive_node_bip32, CxCurve, EcfpPublicKey};
+use vanadium_sdk::crypto::{derive_node_bip32, CxCurve, EcfpPrivateKey, EcfpPublicKey, ecfp_generate_keypair};
 
 use crate::{
     crypto::{get_checksum, get_compressed_pubkey, get_key_fingerprint},
@@ -45,16 +45,17 @@ pub fn handle_get_extended_pubkey<'a>(
         Some(&mut privkey_bytes),
         Some(&mut chaincode),
     )?;
+    let privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &privkey_bytes);
 
-    // TODO: avoid double derivation; currently no way of getting chaincode and pubkey from the sdk
-    let pubkey: EcfpPublicKey = EcfpPublicKey::from_path(CxCurve::Secp256k1, &req.bip32_path)?;
+    // Generate corresponding public key
+    let pubkey = EcfpPublicKey::from_privkey(&privkey)?;
 
     let child_number = req.bip32_path.last().cloned().unwrap_or(0);
 
     let mut serialized_pubkey = Vec::new();
 
     // Version
-    serialized_pubkey.extend_from_slice(&0x043587CFu32.to_be_bytes()); // TODO: generalize to other networks
+    serialized_pubkey.extend_from_slice(&0x043587CFu32.to_be_bytes()); // TODO: generalize to other networks, this is testnet
 
     // Depth
     if req.bip32_path.len() > 10 {
