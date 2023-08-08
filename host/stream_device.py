@@ -176,11 +176,22 @@ class DeviceStream:
         assert self.recv_buffer_counter == request.counter
         self.recv_buffer_counter += 1
 
+        print("\nIn handle_recv_buffer")  # TODO: remove
+        print(f"recv_buffer_counter: {self.recv_buffer_counter}")  # TODO: remove
+
+        print(f"maxsize: {request.maxsize}")  # TODO: remove
+
         buf = self.recv_buffer[:request.maxsize]
         self.recv_buffer = self.recv_buffer[request.maxsize:]
+
+        print(f"buf: {buf!r} (len: {len(buf)})")  # TODO: remove
+        print(f"remaining: {self.recv_buffer!r} (len: {len(self.recv_buffer)})")  # TODO: remove
+
         logger.debug(f"buf: {buf!r}")
         logger.debug(f"buffer: {self.recv_buffer!r}")
         if len(self.recv_buffer) == 0:
+            print(f"that was the last. (size: {request.maxsize}, {len(buf)})")  # TODO: remove
+
             logger.debug(f"recv buffer last (size: {request.maxsize}, {len(buf)})")
             self.recv_buffer_counter = 0
             last = 0x01
@@ -193,6 +204,8 @@ class DeviceStream:
             buf = buf[1:]
         else:
             p2 = 0x00
+
+        print("handle_recv_buffer completed")  # TODO: remove
 
         return self.client.exchange(0x00, p1=last, p2=p2, data=buf)
 
@@ -248,6 +261,7 @@ class DeviceStream:
                 self.handle_fatal(apdu.data)
                 break
             else:
+                print(f"unexpected status {apdu.status:#06x}, {apdu.data}")  # TODO: remove
                 logger.error(f"unexpected status {apdu.status:#06x}, {apdu.data}")
                 assert False
 

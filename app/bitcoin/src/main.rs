@@ -26,6 +26,9 @@ mod ui;
 mod version;
 mod wallet;
 
+#[cfg(feature = "profile")]
+mod profile;
+
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
 use alloc::vec;
@@ -41,6 +44,24 @@ use message::message::*;
 use vanadium_sdk::fatal;
 
 use handlers::*;
+
+#[macro_export]
+macro_rules! prof {
+    () => {
+        #[cfg(feature = "profile")]
+        crate::profile::profile_checkpoint(file!(), line!(), None);
+
+        #[cfg(not(feature = "profile"))]
+        {}
+    };
+    ($msg:expr) => {
+        #[cfg(feature = "profile")]
+        crate::profile::profile_checkpoint(file!(), line!(), Some($msg));
+
+        #[cfg(not(feature = "profile"))]
+        {}
+    };
+}
 
 fn set_error(msg: &'_ str) -> ResponseError {
     ResponseError {
@@ -77,6 +98,9 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
                 OneOfresponse::get_wallet_address(handle_get_wallet_address(req)?)
             }
             OneOfrequest::sign_psbt(req) => OneOfresponse::sign_psbt(handle_sign_psbt(req)?),
+            OneOfrequest::continue_interrupted(_) => {
+                OneOfresponse::error(set_error("Unexpected continue_interrupted request"))
+            }
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };

@@ -491,6 +491,59 @@ impl<'a> MessageWrite for ResponseError<'a> {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct ResponseProfilingEvent<'a> {
+    pub file: Cow<'a, str>,
+    pub line: u32,
+    pub message: Cow<'a, str>,
+}
+
+impl<'a> MessageRead<'a> for ResponseProfilingEvent<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.file = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(16) => msg.line = r.read_uint32(bytes)?,
+                Ok(26) => msg.message = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for ResponseProfilingEvent<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.file == "" { 0 } else { 1 + sizeof_len((&self.file).len()) }
+        + if self.line == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.line) as u64) }
+        + if self.message == "" { 0 } else { 1 + sizeof_len((&self.message).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.file != "" { w.write_with_tag(10, |w| w.write_string(&**&self.file))?; }
+        if self.line != 0u32 { w.write_with_tag(16, |w| w.write_uint32(*&self.line))?; }
+        if self.message != "" { w.write_with_tag(26, |w| w.write_string(&**&self.message))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct RequestContinueInterrupted { }
+
+impl<'a> MessageRead<'a> for RequestContinueInterrupted {
+    fn from_reader(r: &mut BytesReader, _: &[u8]) -> Result<Self> {
+        r.read_to_end();
+        Ok(Self::default())
+    }
+}
+
+impl MessageWrite for RequestContinueInterrupted { }
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct Request<'a> {
     pub request: mod_Request::OneOfrequest<'a>,
 }
@@ -506,6 +559,7 @@ impl<'a> MessageRead<'a> for Request<'a> {
                 Ok(34) => msg.request = mod_Request::OneOfrequest::register_wallet(r.read_message::<RequestRegisterWallet>(bytes)?),
                 Ok(42) => msg.request = mod_Request::OneOfrequest::get_wallet_address(r.read_message::<RequestGetWalletAddress>(bytes)?),
                 Ok(50) => msg.request = mod_Request::OneOfrequest::sign_psbt(r.read_message::<RequestSignPsbt>(bytes)?),
+                Ok(2058) => msg.request = mod_Request::OneOfrequest::continue_interrupted(r.read_message::<RequestContinueInterrupted>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -524,6 +578,7 @@ impl<'a> MessageWrite for Request<'a> {
             mod_Request::OneOfrequest::register_wallet(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::get_wallet_address(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::sign_psbt(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Request::OneOfrequest::continue_interrupted(ref m) => 2 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::None => 0,
     }    }
 
@@ -534,6 +589,7 @@ impl<'a> MessageWrite for Request<'a> {
             mod_Request::OneOfrequest::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::get_wallet_address(ref m) => { w.write_with_tag(42, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::sign_psbt(ref m) => { w.write_with_tag(50, |w| w.write_message(m))? },
+            mod_Request::OneOfrequest::continue_interrupted(ref m) => { w.write_with_tag(2058, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::None => {},
     }        Ok(())
     }
@@ -552,6 +608,7 @@ pub enum OneOfrequest<'a> {
     register_wallet(RequestRegisterWallet<'a>),
     get_wallet_address(RequestGetWalletAddress<'a>),
     sign_psbt(RequestSignPsbt<'a>),
+    continue_interrupted(RequestContinueInterrupted),
     None,
 }
 
@@ -580,7 +637,8 @@ impl<'a> MessageRead<'a> for Response<'a> {
                 Ok(34) => msg.response = mod_Response::OneOfresponse::register_wallet(r.read_message::<ResponseRegisterWallet>(bytes)?),
                 Ok(42) => msg.response = mod_Response::OneOfresponse::get_wallet_address(r.read_message::<ResponseGetWalletAddress>(bytes)?),
                 Ok(50) => msg.response = mod_Response::OneOfresponse::sign_psbt(r.read_message::<ResponseSignPsbt>(bytes)?),
-                Ok(58) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
+                Ok(122) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
+                Ok(2058) => msg.response = mod_Response::OneOfresponse::profiling_event(r.read_message::<ResponseProfilingEvent>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -600,6 +658,7 @@ impl<'a> MessageWrite for Response<'a> {
             mod_Response::OneOfresponse::get_wallet_address(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::sign_psbt(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::error(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Response::OneOfresponse::profiling_event(ref m) => 2 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::None => 0,
     }    }
 
@@ -610,7 +669,8 @@ impl<'a> MessageWrite for Response<'a> {
             mod_Response::OneOfresponse::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::get_wallet_address(ref m) => { w.write_with_tag(42, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::sign_psbt(ref m) => { w.write_with_tag(50, |w| w.write_message(m))? },
-            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(58, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(122, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::profiling_event(ref m) => { w.write_with_tag(2058, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::None => {},
     }        Ok(())
     }
@@ -630,6 +690,7 @@ pub enum OneOfresponse<'a> {
     get_wallet_address(ResponseGetWalletAddress<'a>),
     sign_psbt(ResponseSignPsbt<'a>),
     error(ResponseError<'a>),
+    profiling_event(ResponseProfilingEvent<'a>),
     None,
 }
 

@@ -15,7 +15,18 @@ from prompt_toolkit.history import FileHistory
 from argparse import ArgumentParser
 from typing import Optional
 
-from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestGetExtendedPubkey, RequestRegisterWallet, RequestGetWalletAddress, RequestSignPsbt, Request, Response
+from message_pb2 import (
+    RequestGetVersion,
+    RequestGetMasterFingerprint,
+    RequestGetExtendedPubkey,
+    RequestRegisterWallet,
+    RequestGetWalletAddress,
+    RequestSignPsbt,
+    RequestContinueInterrupted,
+    Request,
+    Response,
+)
+
 from util import bip32_path_to_list
 
 # TODO: make a proper package for the stream.py module
@@ -262,11 +273,27 @@ if __name__ == "__main__":
                 request = prepare_request(args_dict)
 
                 time_start = time.time()
-                data: Optional[bytes] = streamer.exchange(request)
-                last_command_time = time.time() - time_start
 
-                response = Response()
-                response.ParseFromString(data)
+                finished = False
+                while not finished:
+                    data: Optional[bytes] = streamer.exchange(request)
+
+                    response = Response()
+                    response.ParseFromString(data)
+
+                    # If a profiling event is received
+                    if response.WhichOneof("response") != "profiling_event":
+                        finished = True
+                    else:
+                        print("Received profiling event:", response)  # TODO: parse and print nicely
+
+                        message = Request()
+                        message.continue_interrupted.CopyFrom(RequestContinueInterrupted())
+
+                        print("Sending back:", message)  # TODO: parse and print nicely
+                        data = streamer.exchange(message.SerializeToString())
+
+                last_command_time = time.time() - time_start
 
                 if response.WhichOneof("response") == "error":
                     print(f"Error: {response.error.error_msg}")
@@ -277,3 +304,4 @@ if __name__ == "__main__":
                     parse_response(response)
             except Exception as e:
                 print(f"An error occurred: {str(e)}")
+                raise e

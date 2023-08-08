@@ -71,6 +71,16 @@ message ResponseError {
   string error_msg = 1;
 }
 
+message ResponseProfilingEvent {
+  string file = 1;
+  uint32 line = 2;
+  optional string message = 3;
+}
+
+// Continue an interrupted command
+message RequestContinueInterrupted {
+}
+
 message Request {
   oneof request {
     RequestGetVersion get_version = 1;
@@ -79,6 +89,8 @@ message Request {
     RequestRegisterWallet register_wallet = 4;
     RequestGetWalletAddress get_wallet_address = 5;
     RequestSignPsbt sign_psbt = 6;
+
+    RequestContinueInterrupted continue_interrupted = 257;
   }
 }
 
@@ -90,6 +102,9 @@ message Response {
     ResponseRegisterWallet register_wallet = 4;
     ResponseGetWalletAddress get_wallet_address = 5;
     ResponseSignPsbt sign_psbt = 6;
-    ResponseError error = 7;
+
+    ResponseError error = 15;
+
+    ResponseProfilingEvent profiling_event = 257;
   }
 }

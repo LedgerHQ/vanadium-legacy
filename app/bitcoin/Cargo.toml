@@ -3,6 +3,9 @@ name = "vnd-bitcoin"
 version = "0.1.0"
 authors = ["Salvatore Ingala"]
 
+[features]
+profile = []  # enable profiling messages
+
 [[bin]]
 name = "vnd-bitcoin"
 path = "src/main.rs"

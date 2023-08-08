@@ -606,11 +606,11 @@ static void debug_cpu(const struct rv_cpu *cpu, uint32_t instruction)
 
     err(buf);
 
-    PRINTF("Registers: ");
-    for (int i = 0; i < 32; i++) {
-        PRINTF("%08x ", cpu->regs[i]);
-    }
-    PRINTF("\n");
+    // PRINTF("Registers: ");
+    // for (int i = 0; i < 32; i++) {
+    //     PRINTF("%08x ", cpu->regs[i]);
+    // }
+    // PRINTF("\n");
 }
 
 void stream_run_app(void)
@@ -622,7 +622,7 @@ void stream_run_app(void)
         if (!get_instruction(app.cpu.pc, &instruction)) {
             fatal("get_instruction failed\n");
         }
-        if (0) {
+        if (1) {
             debug_cpu(&app.cpu, instruction);
         }
         stop = !rv_cpu_execute(&app.cpu, instruction);

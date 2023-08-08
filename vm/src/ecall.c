@@ -67,6 +67,9 @@ bool sys_xrecv(eret_t *eret, guest_pointer_t p_buf, size_t size)
         cmd->maxsize = n;
         cmd->cmd = (CMD_RECV_BUFFER >> 8) | ((CMD_RECV_BUFFER & 0xff) << 8);
 
+        PRINTF("%s:sys_xrecv:%d: size: %d\n", __FILE__, __LINE__, size); // TODO: remove
+        PRINTF("maxsize: %d\n", cmd->maxsize); // TODO: remove
+
         size_t received = io_exchange(CHANNEL_APDU, sizeof(*cmd));
 
         /* 2. ensure that data received fits in the buffer */
@@ -89,6 +92,10 @@ bool sys_xrecv(eret_t *eret, guest_pointer_t p_buf, size_t size)
         }
 
         n = apdu->lc + 1;
+
+        PRINTF("Received %d bytes: %02X", n, apdu->p2);
+        for (int i = 0; i < n - 1; i++) PRINTF("%02X", apdu->data[i]);
+        PRINTF("\n");
 
         /* 3. copies data to the app buffer (the first byte is in p2) */
         buffer[0] = apdu->p2;

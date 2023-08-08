@@ -68,9 +68,13 @@ pub fn handle_get_wallet_address<'a>(
         }
     }
 
+    crate::prof!("Computing script");
+
     let script = wallet_policy
         .to_script(req.change, req.address_index)
         .map_err(|_| AppError::new("Failed to produce script"))?;
+
+    crate::prof!("Computing address");
 
     let addr: Address<NetworkChecked> =
         Address::from_script(script.as_script(), bitcoin::Network::Testnet)
