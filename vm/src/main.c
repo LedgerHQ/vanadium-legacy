@@ -30,7 +30,7 @@ typedef struct {
     command_e ins;  /// Instruction code
     uint8_t p1;     /// Instruction parameter 1
     uint8_t p2;     /// Instruction parameter 2
-    uint8_t lc;     /// Lenght of command data
+    uint16_t lc;    /// Lenght of command data
     uint8_t *data;  /// Command data
 } command_t;
 
@@ -44,7 +44,7 @@ static bool apdu_parser(command_t *cmd, uint8_t *buf, size_t buf_len) {
     cmd->ins = (command_e) buf[OFFSET_INS];
     cmd->p1 = buf[OFFSET_P1];
     cmd->p2 = buf[OFFSET_P2];
-    cmd->lc = buf[OFFSET_LC];
+    cmd->lc = buf[OFFSET_LC] + (buf[OFFSET_LC+1] << 8);
     cmd->data = (buf[OFFSET_LC] > 0) ? buf + OFFSET_CDATA : NULL;
 
     return true;

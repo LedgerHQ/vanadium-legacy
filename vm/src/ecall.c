@@ -48,9 +48,8 @@ bool sys_xrecv(eret_t *eret, guest_pointer_t p_buf, size_t size)
     eret->size = 0;
     while (size > 0) {
         struct apdu_s *apdu = (struct apdu_s *)G_io_apdu_buffer;
-        /* an additional byte is stored in p2 to allow entire pages to be
-         * transmitted, hence + 1 */
-        _Static_assert(IO_APDU_BUFFER_SIZE >= sizeof(apdu->data) + 1, "invalid IO_APDU_BUFFER_SIZE");
+
+        _Static_assert(IO_APDU_BUFFER_SIZE >= sizeof(apdu->data), "invalid IO_APDU_BUFFER_SIZE");
 
         size_t n = BUFFER_MIN_SIZE(p_buf.addr, size);
 
@@ -83,16 +82,16 @@ bool sys_xrecv(eret_t *eret, guest_pointer_t p_buf, size_t size)
 
         bool stop = (apdu->p1 == '\x01');
 
-        if ((apdu->lc + 1) > n || ((apdu->lc + 1) != n && !stop)) {
+        if (apdu->lc > n || (apdu->lc != n && !stop)) {
+            PRINTF("apdu->lc = %d; n = %d; stop = %d\n", apdu->lc, n, stop);  // TODO: remove
             err("invalid apdu size\n");
             return false;
         }
 
-        n = apdu->lc + 1;
+        n = apdu->lc;
 
-        /* 3. copies data to the app buffer (the first byte is in p2) */
-        buffer[0] = apdu->p2;
-        memcpy(buffer + 1, apdu->data, n - 1);
+        /* 3. copies data to the app buffer */
+        memcpy(buffer, apdu->data, n);
 
         p_buf.addr += n;
         size -= n;

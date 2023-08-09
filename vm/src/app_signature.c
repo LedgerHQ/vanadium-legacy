@@ -80,9 +80,7 @@ static bool compute_section_hmacs(cx_sha256_t *ctx,
             return false;
         }
 
-        /* the first byte of the page is in p2 */
-        page[0] = apdu->p2;
-        memcpy(&page[1], apdu->data, PAGE_SIZE - 1);
+        memcpy(page, apdu->data, PAGE_SIZE);
 
         /* update app_hash */
         cx_hash_no_throw((cx_hash_t *)ctx, 0, page, PAGE_SIZE, NULL, 0);

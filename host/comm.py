@@ -10,20 +10,19 @@ from typing import Optional, Union
 
 from ledgerwallet.client import LedgerClient
 from ledgerwallet.transport import enumerate_devices
-from ledgerwallet.utils import serialize
 
 
 Apdu = namedtuple("Apdu", "status data")
 logger = logging.getLogger("comm")
 CLA = 0x12
 
+def serialize_ext(data: bytes) -> bytes:
+    return len(data).to_bytes(2, byteorder="little") + data
+
 
 class ApduCmd(IntEnum):
     REQUEST_PAGE = 0x6101
-    REQUEST_HMAC = 0x6102
-    REQUEST_PROOF = 0x6103
     COMMIT_PAGE = 0x6201
-    COMMIT_HMAC = 0x6202
     SEND_BUFFER = 0x6301
     RECV_BUFFER = 0x6401
     EXIT = 0x6501
@@ -36,7 +35,7 @@ class ApduCmd(IntEnum):
 class CommClient(ABC):
     def exchange(self, ins: int, data=b"", p1=0, p2=0, cla=CLA) -> Apdu:
         apdu = bytes([cla, ins, p1, p2])
-        apdu += serialize(data)
+        apdu += serialize_ext(data)
 
         response = self._exchange(apdu)
 

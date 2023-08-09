@@ -119,7 +119,7 @@ def device_sign_app(client: CommClient, app: App) -> None:
         for page in pages:
             assert apdu.status == ApduCmd.REQUEST_APP_PAGE
 
-            apdu = client.exchange(0x01, data=page[1:], p2=page[0], cla=0x34)
+            apdu = client.exchange(0x01, data=page, cla=0x34)
             assert apdu.status == ApduCmd.REQUEST_APP_HMAC
             print(hex(apdu.status), apdu.data.hex())
             mac = apdu.data

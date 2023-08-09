@@ -39,15 +39,12 @@ struct cmd_request_manifest_s {
 
 struct cmd_commit_page_s {
     uint8_t data[PAGE_SIZE];
-    uint16_t cmd;
-} __attribute__((packed));
-
-struct cmd_commit_hmac_s {
     uint32_t addr;
     uint32_t iv;
     uint8_t mac[32];
     uint16_t cmd;
 } __attribute__((packed));
+
 
 struct response_hmac_s {
     uint32_t iv;
@@ -112,7 +109,7 @@ bool stream_request_page(struct page_s *page, const uint32_t addr, const bool re
 
     app_loading_update_ui(true);
 
-    /* 1. retrieve page data */
+    /* 1. retrieve page data and hmac */
 
     cmd->addr = addr;
     cmd->cmd = (CMD_REQUEST_PAGE >> 8) | ((CMD_REQUEST_PAGE & 0xff) << 8);
@@ -124,33 +121,18 @@ bool stream_request_page(struct page_s *page, const uint32_t addr, const bool re
         return false;
     }
 
-    if (apdu->lc != PAGE_SIZE - 1) {
+    if (apdu->lc < PAGE_SIZE + sizeof(struct response_hmac_s)) {
+        PRINTF("apdu->lc = %d\n", apdu->lc);  // TODO: remove
         err("invalid apdu size\n");
         return false;
     }
 
-    /* the first byte of the page is in p2 */
     page->addr = addr;
-    page->data[0] = apdu->p2;
-    memcpy(&page->data[1], apdu->data, PAGE_SIZE - 1);
+    memcpy(page->data, apdu->data, PAGE_SIZE);
 
-    /* 2. retrieve and verify hmac */
+    /* 2. verify hmac */
 
-    cmd->cmd = (CMD_REQUEST_HMAC >> 8) | ((CMD_REQUEST_HMAC & 0xff) << 8);
-    size = io_exchange(CHANNEL_APDU, sizeof(*cmd));
-
-    apdu = parse_apdu(size);
-    if (apdu == NULL) {
-        err("invalid APDU\n");
-        return false;
-    }
-
-    if (apdu->lc != sizeof(struct response_hmac_s)) {
-        err("invalid apdu size\n");
-        return false;
-    }
-
-    struct response_hmac_s *r = (struct response_hmac_s *)&apdu->data;
+    struct response_hmac_s *r = (struct response_hmac_s *)&apdu->data[PAGE_SIZE];
 
     cx_hmac_sha256_t hmac_sha256_ctx;
     struct entry_s entry;
@@ -187,22 +169,8 @@ bool stream_request_page(struct page_s *page, const uint32_t addr, const bool re
         return true;
     }
 
-    cmd->cmd = (CMD_REQUEST_PROOF >> 8) | ((CMD_REQUEST_PROOF & 0xff) << 8);
-    size = io_exchange(CHANNEL_APDU, sizeof(*cmd));
-
-    apdu = parse_apdu(size);
-    if (apdu == NULL) {
-        err("invalid APDU\n");
-        return false;
-    }
-
-    if ((apdu->lc % sizeof(struct proof_s)) != 0) {
-        err("invalid proof size\n");
-        return false;
-    }
-
-    size_t count = apdu->lc / sizeof(struct proof_s);
-    if (!merkle_verify_proof(&entry, (struct proof_s *)&apdu->data, count)) {
+    size_t count = (apdu->lc - PAGE_SIZE - sizeof(struct response_hmac_s)) / sizeof(struct proof_s);
+    if (!merkle_verify_proof(&entry, (struct proof_s *)&apdu->data[PAGE_SIZE + sizeof(struct response_hmac_s)], count)) {
         err("invalid iv (merkle proof)\n");
         return false;
     }
@@ -215,13 +183,11 @@ bool stream_request_page(struct page_s *page, const uint32_t addr, const bool re
  */
 bool stream_commit_page(struct page_s *page, bool insert)
 {
-    struct cmd_commit_page_s *cmd1 = (struct cmd_commit_page_s *)G_io_apdu_buffer;
-    cx_hmac_sha256_t hmac_sha256_ctx;
-    size_t size;
+    struct cmd_commit_page_s *cmd = (struct cmd_commit_page_s *)G_io_apdu_buffer;
 
     app_loading_update_ui(true);
 
-    _Static_assert(IO_APDU_BUFFER_SIZE >= sizeof(*cmd1), "invalid IO_APDU_BUFFER_SIZE");
+    _Static_assert(IO_APDU_BUFFER_SIZE >= sizeof(*cmd), "invalid IO_APDU_BUFFER_SIZE");
 
     /* 1. encryption */
     if (page->iv == 0xffffffff) {
@@ -229,46 +195,27 @@ bool stream_commit_page(struct page_s *page, bool insert)
         return false;
     }
     page->iv++;
-    encrypt_page(page->data, cmd1->data, page->addr, page->iv);
-
-    /* initialize hmac here since cmd1->data may be overwritten later */
-    init_hmac_ctx(&hmac_sha256_ctx, page->iv);
-    cx_hmac_no_throw((cx_hmac_t *)&hmac_sha256_ctx, 0, cmd1->data, sizeof(cmd1->data), NULL, 0);
-
-    cmd1->cmd = (CMD_COMMIT_PAGE >> 8) | ((CMD_COMMIT_PAGE & 0xff) << 8);
-    size = io_exchange(CHANNEL_APDU, sizeof(*cmd1));
-
-    struct apdu_s *apdu = parse_apdu(size);
-    if (apdu == NULL) {
-        err("invalid APDU\n");
-        return false;
-    }
-
-    if (apdu->lc != 0) {
-        err("invalid apdu size\n");
-        return false;
-    }
+    encrypt_page(page->data, cmd->data, page->addr, page->iv);
 
     /* 2. hmac(data || addr || iv) */
 
-    struct cmd_commit_hmac_s *cmd2 = (struct cmd_commit_hmac_s *)G_io_apdu_buffer;
     struct entry_s entry;
-
-    _Static_assert(IO_APDU_BUFFER_SIZE >= sizeof(*cmd2), "invalid IO_APDU_BUFFER_SIZE");
-
     entry.addr = page->addr;
     entry.iv = page->iv;
 
+    cx_hmac_sha256_t hmac_sha256_ctx;
+    init_hmac_ctx(&hmac_sha256_ctx, page->iv);
+    cx_hmac_no_throw((cx_hmac_t *)&hmac_sha256_ctx, 0, cmd->data, sizeof(cmd->data), NULL, 0);
     cx_hmac_no_throw((cx_hmac_t *)&hmac_sha256_ctx, CX_LAST, entry.data, sizeof(entry.data),
-                     cmd2->mac, sizeof(cmd2->mac));
+                     cmd->mac, sizeof(cmd->mac));
 
-    cmd2->addr = page->addr;
-    cmd2->iv = page->iv;
-    cmd2->cmd = (CMD_COMMIT_HMAC >> 8) | ((CMD_COMMIT_HMAC & 0xff) << 8);
+    cmd->addr = page->addr;
+    cmd->iv = page->iv;
+    cmd->cmd = (CMD_COMMIT_PAGE >> 8) | ((CMD_COMMIT_PAGE & 0xff) << 8);
 
-    size = io_exchange(CHANNEL_APDU, sizeof(*cmd2));
+    size_t size = io_exchange(CHANNEL_APDU, sizeof(*cmd));
 
-    apdu = parse_apdu(size);
+    struct apdu_s *apdu = parse_apdu(size);
     if (apdu == NULL) {
         err("invalid APDU\n");
         return false;
