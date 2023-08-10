@@ -104,36 +104,31 @@ class DeviceStream:
         # 2. send encrypted page data
         page = self._get_page(request.addr)
         assert len(page.data) == DeviceStream.PAGE_SIZE
-        apdu = self.client.exchange(0x01, data=page.data[1:], p2=page.data[0])
-        assert apdu.status == ApduCmd.REQUEST_HMAC
 
-        # 4. send iv and mac
-        data = Struct("iv" / Int32ul, "mac" / Bytes(32)).build(dict(iv=page.iv, mac=page.mac))
-        apdu = self.client.exchange(0x02, data=data)
+        data = page.data
+        # 4. add iv and mac
+        data += Struct("iv" / Int32ul, "mac" / Bytes(32)).build(dict(iv=page.iv, mac=page.mac))
 
-        # 5. send merkle proof
+        # 5. add merkle proof if appropriate
         if not page.read_only:
-            assert apdu.status == ApduCmd.REQUEST_PROOF
             entry, proof = self.merkletree.get_proof(request.addr)
             assert entry.addr == request.addr
             assert entry.counter == page.iv
 
             # TODO: handle larger proofs
             assert len(proof) <= 250
-            apdu = self.client.exchange(0x03, data=proof)
+            data += proof
+ 
+        apdu = self.client.exchange(0x01, data=data)
 
         return apdu
 
     def handle_write_access(self, data: bytes) -> Apdu:
-        # 1. encrypted page data was received
-        assert len(data) == DeviceStream.PAGE_SIZE
-        page_data = data
+        # 1. encrypted page data, addr, iv and mac were received
+        assert len(data) == DeviceStream.PAGE_SIZE + 4 + 4 + 32
+        page_data = data[:DeviceStream.PAGE_SIZE]
 
-        # 2. receive addr, iv and mac
-        apdu = self.client.exchange(0x01)
-        assert apdu.status == ApduCmd.COMMIT_HMAC
-
-        request = DeviceStream._parse_request(Struct("addr" / Int32ul, "iv" / Int32ul, "mac" / Bytes(32)), apdu.data)
+        request = DeviceStream._parse_request(Struct("addr" / Int32ul, "iv" / Int32ul, "mac" / Bytes(32)), data[DeviceStream.PAGE_SIZE:])
         assert (request.addr & DeviceStream.PAGE_MASK_INVERT) == 0
         logger.debug(f"write access: {request.addr:#x} {request.iv:#x} {request.mac.hex()}")
 
@@ -187,14 +182,7 @@ class DeviceStream:
         else:
             last = 0x00
 
-        # the first byte is in p2
-        if buf:
-            p2 = buf[0]
-            buf = buf[1:]
-        else:
-            p2 = 0x00
-
-        return self.client.exchange(0x00, p1=last, p2=p2, data=buf)
+        return self.client.exchange(0x00, p1=last, data=buf)
 
     def handle_exit(self, data: bytes) -> None:
         request = DeviceStream._parse_request(Struct("code" / Int32ul), data)

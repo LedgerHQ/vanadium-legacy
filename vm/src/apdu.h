@@ -13,16 +13,13 @@
 #define OFFSET_P1    2
 #define OFFSET_P2    3
 #define OFFSET_LC    4
-#define OFFSET_CDATA 5
+#define OFFSET_CDATA 6
 
 #define CLA_GENERAL 0x34
 
 enum cmd_stream_e {
     CMD_REQUEST_PAGE = 0x6101,
-    CMD_REQUEST_HMAC = 0x6102,
-    CMD_REQUEST_PROOF = 0x6103,
     CMD_COMMIT_PAGE = 0x6201,
-    CMD_COMMIT_HMAC = 0x6202,
     CMD_SEND_BUFFER = 0x6301,
     CMD_RECV_BUFFER = 0x6401,
     CMD_EXIT = 0x6501,
@@ -32,13 +29,16 @@ enum cmd_stream_e {
     CMD_REQUEST_APP_HMAC = 0x6802,
 };
 
+#define MAX_APDU_DATA_SIZE 548 // TODO
+
+// Note that this diverges from the standard APDU message format used in most apps
 struct apdu_s {
     uint8_t cla;
     uint8_t ins;
     uint8_t p1;
     uint8_t p2;
-    uint8_t lc;
-    uint8_t data[PAGE_SIZE - 1];
+    uint16_t lc;
+    uint8_t data[MAX_APDU_DATA_SIZE];
 } __attribute__((packed));
 
 _Static_assert(IO_APDU_BUFFER_SIZE >= sizeof(struct apdu_s), "invalid IO_APDU_BUFFER_SIZE");
