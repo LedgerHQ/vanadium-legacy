@@ -24,6 +24,7 @@ static ALLOCATOR: allocator::CAlloc = allocator::CAlloc;
 #[derive(Debug)]
 pub enum SdkError {
     KeyGeneration,
+    InvalidPublicKey,
     PathDerivation,
     Signature,
     SignatureVerification,
@@ -33,6 +34,7 @@ impl fmt::Display for SdkError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SdkError::KeyGeneration => write!(f, "key generation"),
+            SdkError::InvalidPublicKey => write!(f, "invalid public key"),
             SdkError::PathDerivation => write!(f, "path derivation"),
             SdkError::Signature => write!(f, "signature"),
             SdkError::SignatureVerification => write!(f, "signature verification"),

@@ -4,9 +4,38 @@ use crate::{
     ecall::{
         ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32, ecall_ecdsa_sign, ecall_ecdsa_verify,
         ecall_get_master_fingerprint, ecall_get_random_bytes, ecall_hash_final,
+        ecall_multm, ecall_powm, ecall_subm
     },
     ecall_hash_update, fatal, SdkError,
 };
+
+
+const SECP256K1_GENERATOR: [u8; 65] = [
+    0x04,
+    0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07,
+    0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98,
+    0x48, 0x3A, 0xDA, 0x77, 0x26, 0xA3, 0xC4, 0x65, 0x5D, 0xA4, 0xFB, 0xFC, 0x0E, 0x11, 0x08, 0xA8,
+    0xFD, 0x17, 0xB4, 0x48, 0xA6, 0x85, 0x54, 0x19, 0x9C, 0x47, 0xD0, 0x8F, 0xFB, 0x10, 0xD4, 0xB8
+];
+
+// Modulo for secp256k1
+const SECP256K1_P: [u8; 32] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0xff, 0xff, 0xfc, 0x2f
+];
+
+// Curve order for secp256k1
+const SECP256K1_N: [u8; 32] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
+    0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41
+];
+
+// (p + 1)/4, used to calculate square roots in secp256k1
+const SECP256K1_SQR_EXPONENT: [u8; 32] = [
+    0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0xff, 0xff, 0x0c
+];
+
 
 #[repr(C)]
 pub struct CtxSha256 {
@@ -44,14 +73,14 @@ pub struct CtxRipeMd160 {
     acc: [u8; 5 * 4],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub enum CxCurve {
     Secp256k1 = 0x21,
     Secp256r1 = 0x22,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct EcfpPublicKey {
     curve: CxCurve,
@@ -59,7 +88,7 @@ pub struct EcfpPublicKey {
     w: [u8; 65],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct EcfpPrivateKey {
     curve: CxCurve,
@@ -345,6 +374,18 @@ pub fn get_master_fingerprint() -> Result<u32, SdkError> {
     }
 }
 
+fn add_u8_to_u256_be(number: &mut [u8; 32], t: u8) -> u8 {
+    let mut carry = t;
+
+    for i in (0..32).rev() {
+        let (sum, new_carry) = number[i].overflowing_add(carry);
+        number[i] = sum;
+        carry = if new_carry { 1 } else { 0 };
+    }
+
+    carry
+}
+
 impl EcfpPublicKey {
     pub fn new(curve: CxCurve, bytes: &[u8; 65]) -> Self {
         Self {
@@ -364,6 +405,12 @@ impl EcfpPublicKey {
         compressed_pubkey[1..].copy_from_slice(&self.w[1..33]);
 
         compressed_pubkey
+    }
+
+    pub fn as_bytes_xonly(&self) -> [u8; 32] {
+        let mut xonly_key = [0u8; 32];
+        xonly_key.copy_from_slice(&self.w[1..33]);
+        xonly_key
     }
 
     pub fn verify(&self, hash: &[u8; 32], sig: &[u8]) -> Result<(), SdkError> {
@@ -397,6 +444,46 @@ impl EcfpPublicKey {
         Ok(pubkey)
     }
 
+    pub fn from_slice(data: &[u8]) -> Result<EcfpPublicKey, SdkError> {
+        if data.is_empty() {
+            return Err(SdkError::InvalidPublicKey);
+        }
+
+        match data.len() {
+            33 => {
+                let prefix = data[0];
+                let x: [u8; 32] = data[1..33].try_into().expect("Cannot fail");
+
+                let mut y = x.clone();
+
+                unsafe {
+                    // TODO: handle errors
+
+                    ecall_multm(y.as_mut_ptr(), x.as_ptr(), x.as_ptr(), SECP256K1_P.as_ptr(), 32); // y = x^2
+                    ecall_multm(y.as_mut_ptr(), y.as_ptr(), x.as_ptr(), SECP256K1_P.as_ptr(), 32); // y = x^3
+
+                    add_u8_to_u256_be(&mut y, 7); // y = x^3 + 7
+
+                    ecall_powm(y.as_mut_ptr(), y.as_ptr(), SECP256K1_SQR_EXPONENT.as_ptr(), 32, SECP256K1_P.as_ptr(), 32);
+
+                    // if the prefix and y don't have the same parity, take the opposite root (mod p)
+                    if ((prefix ^ y[31]) & 1) != 0 {
+                        ecall_subm(y.as_mut_ptr(), SECP256K1_P.as_ptr(), y.as_ptr(), SECP256K1_P.as_ptr(), 32);
+                    }
+
+                }
+
+                let mut w: [u8; 65] = [0; 65];
+                w[0] = 0x04;
+                w[1..33].copy_from_slice(&x);
+                w[33..].copy_from_slice(&y);
+
+                Ok(EcfpPublicKey { curve: CxCurve::Secp256k1, w_len: 65, w })
+            },
+            65 => Ok(EcfpPublicKey { curve: CxCurve::Secp256k1, w_len: 65, w: data.try_into().expect("Cannot fail") }),
+            _ => Err(SdkError::InvalidPublicKey),
+        }
+    }
 }
 
 impl EcfpPrivateKey {
