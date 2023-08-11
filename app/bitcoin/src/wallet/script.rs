@@ -3,14 +3,17 @@ use core::str::FromStr;
 
 use alloc::{boxed::Box, vec, vec::Vec};
 
-use bitcoin::bip32::{ChildNumber, ExtendedPubKey};
 use bitcoin::hashes::Hash;
 use bitcoin::opcodes::{all::*, OP_0};
 use bitcoin::script::Builder;
-use bitcoin::secp256k1::Secp256k1;
-use bitcoin::{PubkeyHash, PublicKey, ScriptBuf, ScriptHash, WPubkeyHash, WScriptHash};
+use bitcoin::{PubkeyHash, ScriptBuf, ScriptHash, WPubkeyHash, WScriptHash};
+
+use vanadium_sdk::crypto::EcfpPublicKey;
 
 use crate::crypto::{hash160, sha256};
+
+use crate::wallet::bip32::ExtendedPubKey;
+
 
 use super::wallet::{DescriptorTemplate, KeyInformation, KeyPlaceholder, WalletPolicy};
 
@@ -82,8 +85,6 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
         mut builder: Builder,
         ctx: ScriptContext,
     ) -> Result<Builder, &'static str> {
-        let secp = Secp256k1::new();
-
         let derive = |kp: &KeyPlaceholder| -> Result<ExtendedPubKey, &'static str> {
             let change_step = if is_change { kp.num2 } else { kp.num1 };
 
@@ -91,16 +92,10 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                 .get(kp.key_index as usize)
                 .ok_or("Invalid key index")?;
 
-            let root_pubkey =
-                ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
-
-            let change_step = ChildNumber::from_normal_idx(change_step)
-                .map_err(|_| "Invalid change derivation step")?;
-            let addr_index_step = ChildNumber::from_normal_idx(address_index)
-                .map_err(|_| "Invalid address index derivation step")?;
+            let root_pubkey = ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
 
             root_pubkey
-                .derive_pub(&secp, &vec![change_step, addr_index_step])
+                .derive_pub(&vec![change_step, address_index])
                 .map_err(|_| "Failed to produce derived key")
         };
 
@@ -134,8 +129,8 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                 builder.push_int(0).push_slice(script_hash)
             }
             DescriptorTemplate::Pkh(kp) => {
-                let pubkey = derive(kp)?.to_pub();
-                let pubkey_hash = PubkeyHash::from_byte_array(hash160(&pubkey.to_bytes()));
+                let pubkey = derive(kp)?.public_key.to_compressed();
+                let pubkey_hash = PubkeyHash::from_byte_array(hash160(&pubkey));
 
                 builder
                     .push_opcode(OP_DUP)
@@ -145,8 +140,8 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                     .push_opcode(OP_CHECKSIG)
             }
             DescriptorTemplate::Wpkh(kp) => {
-                let pubkey = derive(kp)?.to_pub();
-                let pubkey_hash = WPubkeyHash::from_byte_array(hash160(&pubkey.to_bytes()));
+                let pubkey = derive(kp)?.public_key.to_compressed();
+                let pubkey_hash = WPubkeyHash::from_byte_array(hash160(&pubkey));
 
                 builder.push_int(0).push_slice(pubkey_hash)
             }
@@ -168,16 +163,16 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                     .iter()
                     .map(|kp| derive(kp))
                     .map(|derived_key_result| {
-                        derived_key_result.map(|extended_pub_key| extended_pub_key.to_pub())
+                        derived_key_result.map(|extended_pub_key| extended_pub_key.public_key)
                     })
-                    .collect::<Result<Vec<PublicKey>, &'static str>>()?;
+                    .collect::<Result<Vec<EcfpPublicKey>, &'static str>>()?;
 
                 if matches!(self, DescriptorTemplate::Sortedmulti(_, _)) {
-                    keys.sort();
+                    keys.sort_by(|x, y| x.to_compressed().cmp(&y.to_compressed()));
                 }
 
                 for key in keys {
-                    builder = builder.push_key(&key);
+                    builder = builder.push_slice(&key.as_bytes());
                 }
 
                 builder
@@ -200,21 +195,16 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                     .iter()
                     .map(|kp| derive(kp))
                     .map(|derived_key_result| {
-                        derived_key_result.map(|extended_pub_key| extended_pub_key.to_pub())
+                        derived_key_result.map(|extended_pub_key| extended_pub_key.public_key)
                     })
-                    .collect::<Result<Vec<PublicKey>, &'static str>>()?;
+                    .collect::<Result<Vec<EcfpPublicKey>, &'static str>>()?;
 
                 if matches!(self, DescriptorTemplate::Sortedmulti_a(_, _)) {
-                    keys.sort();
+                    keys.sort_by(|x, y| x.as_bytes_xonly().cmp(&y.as_bytes_xonly()));
                 }
 
                 for (idx, key) in keys.iter().enumerate() {
-                    // skip the first bytes, as they are x-only keys
-                    let key_arr: [u8; 32] = key.to_bytes().as_slice()[1..]
-                        .try_into()
-                        .map_err(|_| "Wrong key length")?;
-                    // let x_only_key X
-                    builder = builder.push_slice(key_arr);
+                    builder = builder.push_slice(key.as_bytes_xonly());
 
                     if idx == 0 {
                         builder = builder.push_opcode(OP_CHECKSIG);
@@ -236,30 +226,18 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
             DescriptorTemplate::Pk_k(kp) => {
                 let key = derive(kp)?;
                 if ctx == ScriptContext::Tr {
-                    builder.push_x_only_key(&key.to_x_only_pub())
+                    builder.push_slice(&key.public_key.as_bytes_xonly())
                 } else {
-                    builder.push_key(&key.to_pub())
+                    builder.push_slice(&key.public_key.to_compressed())
                 }
             }
             DescriptorTemplate::Pk_h(kp) => {
-                let rip: [u8; 20];
-                if ctx == ScriptContext::Tr {
-                    let key = derive(kp)?.to_x_only_pub();
-                    let key_arr: [u8; 32] = key
-                        .serialize()
-                        .as_slice()
-                        .try_into()
-                        .map_err(|_| "Wrong key length")?;
-                    rip = hash160(&key_arr);
+                let key = derive(kp)?;
+                let rip: [u8; 20] = if ctx == ScriptContext::Tr {
+                    hash160(&key.public_key.as_bytes_xonly())
                 } else {
-                    let key = derive(kp)?.to_pub();
-                    let key_arr: [u8; 33] = key
-                        .to_bytes()
-                        .as_slice()
-                        .try_into()
-                        .map_err(|_| "Wrong key length")?;
-                    rip = hash160(&key_arr);
-                }
+                    hash160(&key.public_key.to_compressed())
+                };
 
                 builder
                     .push_opcode(OP_DUP)

@@ -125,12 +125,45 @@ bool ecall_hash_final(const cx_hash_id_t hash_id, ctx_hash_guest_t *ctx, uint8_t
     return eret.success;
 }
 
+bool ecall_addm(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, size_t len)
+{
+    eret_t eret;
+
+    if (!sys_addm(&eret, NP(r), NP(a), NP(b), NP(m), len)) {
+        errx(1, "sys_addm failed");
+    }
+
+    return eret.success;
+}
+
+bool ecall_subm(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, size_t len)
+{
+    eret_t eret;
+
+    if (!sys_subm(&eret, NP(r), NP(a), NP(b), NP(m), len)) {
+        errx(1, "sys_subm failed");
+    }
+
+    return eret.success;
+}
+
 bool ecall_multm(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, size_t len)
 {
     eret_t eret;
 
     if (!sys_multm(&eret, NP(r), NP(a), NP(b), NP(m), len)) {
         errx(1, "sys_multm failed");
+    }
+
+    return eret.success;
+}
+
+bool ecall_powm(uint8_t *r, const uint8_t *a, const uint8_t *e, size_t len_e, const uint8_t *m, size_t len)
+{
+    eret_t eret;
+
+    if (!sys_powm(&eret, NP(r), NP(a), NP(e), len_e, NP(m), len)) {
+        errx(1, "sys_powm failed");
     }
 
     return eret.success;

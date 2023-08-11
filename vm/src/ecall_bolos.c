@@ -243,6 +243,100 @@ bool sys_get_random_bytes(guest_pointer_t p_buffer, size_t size)
 }
 
 /**
+ * If m is NULL, add().
+ */
+bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
+{
+    uint8_t r[64], a[32], b[32];
+
+    if (len > sizeof(a)) {
+        err("invalid size for addm");
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_a, a, len)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_b, b, len)) {
+        return false;
+    }
+
+    cx_err_t err;
+    if (p_m.addr == 0) {
+        err = cx_math_add_no_throw(r, a, b, len);
+    } else {
+        uint8_t m[32];
+        if (!copy_guest_buffer(p_m, m, len)) {
+            return false;
+        }
+
+        err = cx_math_addm_no_throw(r, a, b, m, len);
+    }
+
+    if (err != CX_OK) {
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_host_buffer(p_r, r, len * 2)) {
+        return false;
+    }
+
+    eret->success = true;
+
+    return true;
+}
+
+/**
+ * If m is NULL, sub().
+ */
+bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
+{
+    uint8_t r[64], a[32], b[32];
+
+    if (len > sizeof(a)) {
+        err("invalid size for subm");
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_a, a, len)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_b, b, len)) {
+        return false;
+    }
+
+    cx_err_t err;
+    if (p_m.addr == 0) {
+        err = cx_math_sub_no_throw(r, a, b, len);
+    } else {
+        uint8_t m[32];
+        if (!copy_guest_buffer(p_m, m, len)) {
+            return false;
+        }
+
+        err = cx_math_subm_no_throw(r, a, b, m, len);
+    }
+
+    if (err != CX_OK) {
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_host_buffer(p_r, r, len * 2)) {
+        return false;
+    }
+
+    eret->success = true;
+
+    return true;
+}
+
+/**
  * If m is NULL, mult().
  */
 bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
@@ -281,6 +375,47 @@ bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poi
     }
 
     if (!copy_host_buffer(p_r, r, len * 2)) {
+        return false;
+    }
+
+    eret->success = true;
+
+    return true;
+}
+
+/**
+ * TODO: verify if cx_math_powm_no_throw works for lengths > 32
+ */
+bool sys_powm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_e, size_t len_e, guest_pointer_t p_m, size_t len)
+{
+    uint8_t r[32], a[32], e[32], m[32];
+
+    if (len > sizeof(r) || len_e > sizeof(e)) {
+        err("invalid size for powm");
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_a, a, len)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_e, e, len_e)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_m, m, len)) {
+        return false;
+    }
+
+    cx_err_t err = cx_math_powm_no_throw(r, a, e, len_e, m, len);
+
+    if (err != CX_OK) {
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_host_buffer(p_r, r, len)) {
         return false;
     }
 

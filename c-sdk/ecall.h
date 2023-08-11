@@ -53,6 +53,7 @@ bool ecall_hash_update(const cx_hash_id_t hash_id,
                        const uint8_t *buffer,
                        const size_t size);
 bool ecall_multm(uint8_t *r, const uint8_t *a, const uint8_t *b, const uint8_t *m, size_t len);
+bool ecall_powm(uint8_t *r, const uint8_t *a, const uint8_t *e, size_t len_e, const uint8_t *m, size_t len);
 void ecall_screen_update(void);
 bool ecall_tostring256(const uint256_t *number, const unsigned int base, char *out, size_t len);
 void ecall_ux_idle(void);

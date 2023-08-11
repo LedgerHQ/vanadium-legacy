@@ -31,11 +31,6 @@ const BIP32_FIRST_HARDENED_CHILD: u32 = 0x80000000u32;
 pub fn handle_get_wallet_address<'a>(
     req: RequestGetWalletAddress,
 ) -> Result<ResponseGetWalletAddress<'a>> {
-    // Ok(ResponseGetWalletAddress {
-    //     wallet_id: Cow::Owned(id.into()),
-    //     wallet_hmac: Cow::Owned(hmac.into())
-    // })
-
     if req.address_index >= BIP32_FIRST_HARDENED_CHILD {
         return Err(AppError::new("Address index too large"));
     }
