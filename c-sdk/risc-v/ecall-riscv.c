@@ -261,6 +261,8 @@ ECALL4(ecall_tostring256, ECALL_TOSTRING256, bool, const uint256_t *, number, co
 ECALL4(ecall_ecdsa_verify, ECALL_ECDSA_VERIFY, bool, const cx_ecfp_public_key_t *, key, const uint8_t *, hash, const uint8_t *, sig, const size_t, sig_len)
 ECALL4v(ecall_bagl_draw_with_context, ECALL_BAGL_DRAW, packed_bagl_component_t *,component, const void *, context, unsigned short, context_length, unsigned char, context_encoding)
 ECALL5(ecall_derive_node_bip32, ECALL_DERIVE_NODE_BIP32, bool, cx_curve_t, curve, const unsigned int *, path, size_t, path_count, uint8_t *, private_key, uint8_t *, chain)
+ECALL5(ecall_addm, ECALL_ADDM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, b, const uint8_t *, m, size_t, len)
+ECALL5(ecall_subm, ECALL_SUBM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, b, const uint8_t *, m, size_t, len)
 ECALL5(ecall_multm, ECALL_MULTM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, b, const uint8_t *, m, size_t, len)
 ECALL5v(ecall_bagl_hal_draw_rect, ECALL_UX_RECTANGLE, unsigned int, color, int, x, int, y, unsigned int, width, unsigned int, height)
 ECALL6(ecall_powm, ECALL_POWM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, e, size_t, e_len, const uint8_t *, m, size_t, len)

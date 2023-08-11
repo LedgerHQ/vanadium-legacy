@@ -94,6 +94,12 @@ bool ecall(struct rv_cpu *cpu)
     case ECALL_GET_RANDOM_BYTES:
         success = sys_get_random_bytes(GP(RV_REG_A0), cpu->regs[RV_REG_A1]);
         break;
+    case ECALL_ADDM:
+        success = sys_addm(ERET(RV_REG_A0), GP(RV_REG_A0), GP(RV_REG_A1), GP(RV_REG_A2), GP(RV_REG_A3), cpu->regs[RV_REG_A4]);
+        break;
+    case ECALL_SUBM:
+        success = sys_subm(ERET(RV_REG_A0), GP(RV_REG_A0), GP(RV_REG_A1), GP(RV_REG_A2), GP(RV_REG_A3), cpu->regs[RV_REG_A4]);
+        break;
     case ECALL_MULTM:
         success = sys_multm(ERET(RV_REG_A0), GP(RV_REG_A0), GP(RV_REG_A1), GP(RV_REG_A2), GP(RV_REG_A3), cpu->regs[RV_REG_A4]);
         break;
