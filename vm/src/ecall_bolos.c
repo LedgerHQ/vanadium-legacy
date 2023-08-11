@@ -289,6 +289,47 @@ bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poi
     return true;
 }
 
+/**
+ * TODO: verify if cx_math_powm_no_throw works for lengths > 32
+ */
+bool sys_powm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_e, size_t len_e, guest_pointer_t p_m, size_t len)
+{
+    uint8_t r[32], a[32], e[32], m[32];
+
+    if (len > sizeof(r) || len_e > sizeof(e)) {
+        err("invalid size for powm");
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_a, a, len)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_e, e, len_e)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_m, m, len)) {
+        return false;
+    }
+
+    cx_err_t err = cx_math_powm_no_throw(r, a, e, len_e, m, len);
+
+    if (err != CX_OK) {
+        eret->success = false;
+        return true;
+    }
+
+    if (!copy_host_buffer(p_r, r, len)) {
+        return false;
+    }
+
+    eret->success = true;
+
+    return true;
+}
+
 bool sys_tostring256(eret_t *eret, const guest_pointer_t p_number, const unsigned int base, guest_pointer_t p_out, size_t len)
 {
     uint256_t number;

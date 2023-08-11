@@ -24,8 +24,9 @@
 #define ECALL_ECDSA_SIGN             104
 #define ECALL_ECDSA_VERIFY           105
 #define ECALL_MULTM                  106
-#define ECALL_TOSTRING256            107
-#define ECALL_HASH_UPDATE            108
-#define ECALL_HASH_FINAL             109
-#define ECALL_GET_RANDOM_BYTES       110
-#define ECALL_GET_MASTER_FINGERPRINT 111
+#define ECALL_POWM                   107
+#define ECALL_TOSTRING256            108
+#define ECALL_HASH_UPDATE            109
+#define ECALL_HASH_FINAL             110
+#define ECALL_GET_RANDOM_BYTES       111
+#define ECALL_GET_MASTER_FINGERPRINT 112

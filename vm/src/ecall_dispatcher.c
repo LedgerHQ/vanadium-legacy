@@ -97,6 +97,9 @@ bool ecall(struct rv_cpu *cpu)
     case ECALL_MULTM:
         success = sys_multm(ERET(RV_REG_A0), GP(RV_REG_A0), GP(RV_REG_A1), GP(RV_REG_A2), GP(RV_REG_A3), cpu->regs[RV_REG_A4]);
         break;
+    case ECALL_POWM:
+        success = sys_powm(ERET(RV_REG_A0), GP(RV_REG_A0), GP(RV_REG_A1), GP(RV_REG_A2), cpu->regs[RV_REG_A3], GP(RV_REG_A4), cpu->regs[RV_REG_A5]);
+        break;
     case ECALL_TOSTRING256:
         success = sys_tostring256(ERET(RV_REG_A0), GP(RV_REG_A0), cpu->regs[RV_REG_A1], GP(RV_REG_A2), cpu->regs[RV_REG_A3]);
         break;

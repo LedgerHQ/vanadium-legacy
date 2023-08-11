@@ -75,4 +75,21 @@ extern "C" {
     ) -> bool;
     pub fn ecall_hash_final(hash_id: CxHashId, ctx: CtxHashGuest, buffer: *mut u8) -> bool;
     pub fn ecall_get_master_fingerprint(out: *mut [u8; 4]) -> bool;
+
+    pub fn ecall_multm(
+        r: *mut u8,
+        a: *const u8,
+        b: *const u8,
+        m: *const u8,
+        len: usize,
+    ) -> bool;
+
+    pub fn ecall_powm(
+        r: *mut u8,
+        a: *const u8,
+        e: *const u8,
+        len_e: usize,
+        m: *const u8,
+        len: usize,
+    ) -> bool;
 }
