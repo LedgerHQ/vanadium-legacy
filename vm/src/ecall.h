@@ -24,6 +24,13 @@ typedef union eret_u {
     size_t size;
 } eret_t;
 
+typedef enum {
+    BASE58ENCODE = 0,
+    BASE58DECODE = 1,
+    SEGWITADDRMAINNET = 2, // encoding of a segwit address, with hrp = 'bc'
+    SEGWITADDRTESTNET = 3, // encoding of a segwit address, with hrp = 'tb'
+} FormatConversion;
+
 #define ERET(reg) ((eret_t *)&cpu->regs[reg])
 
 /* Guest Pointer */
@@ -70,5 +77,7 @@ bool sys_powm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
 bool sys_tostring256(eret_t *eret, const guest_pointer_t p_number, const unsigned int base, guest_pointer_t p_out, size_t len);
 
 bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_fpr);
+
+bool sys_convert(eret_t *eret, FormatConversion format, const guest_pointer_t p_src, size_t src_len, guest_pointer_t p_dst, size_t dst_max_len);
 
 bool ecall(struct rv_cpu *cpu);

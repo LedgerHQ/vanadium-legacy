@@ -32,3 +32,4 @@
 #define ECALL_HASH_FINAL             112
 #define ECALL_GET_RANDOM_BYTES       113
 #define ECALL_GET_MASTER_FINGERPRINT 114
+#define ECALL_CONVERT                115

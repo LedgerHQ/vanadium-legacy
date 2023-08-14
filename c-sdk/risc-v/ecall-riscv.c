@@ -264,6 +264,7 @@ ECALL5(ecall_derive_node_bip32, ECALL_DERIVE_NODE_BIP32, bool, cx_curve_t, curve
 ECALL5(ecall_addm, ECALL_ADDM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, b, const uint8_t *, m, size_t, len)
 ECALL5(ecall_subm, ECALL_SUBM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, b, const uint8_t *, m, size_t, len)
 ECALL5(ecall_multm, ECALL_MULTM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, b, const uint8_t *, m, size_t, len)
+ECALL5(ecall_convert, ECALL_CONVERT, bool, uint32_t, format, const uint8_t *, src, size_t, src_len, char *, dst, size_t, dst_max_len)
 ECALL5v(ecall_bagl_hal_draw_rect, ECALL_UX_RECTANGLE, unsigned int, color, int, x, int, y, unsigned int, width, unsigned int, height)
 ECALL6(ecall_powm, ECALL_POWM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, e, size_t, e_len, const uint8_t *, m, size_t, len)
 ECALL7(ecall_ecdsa_sign, ECALL_ECDSA_SIGN, size_t, const cx_ecfp_private_key_t *, key, const int, mode, const cx_md_t, hash_id, const uint8_t *, hash, uint8_t *, sig, size_t, sig_len, int *, parity)
