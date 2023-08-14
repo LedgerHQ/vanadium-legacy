@@ -5,9 +5,11 @@
 extern crate alloc;
 
 mod allocator;
+pub mod base58;
 pub mod crypto;
 mod ecall;
 pub mod glyphs;
+pub mod segwit_addr;
 pub mod ux;
 
 pub mod secp256k1;
@@ -21,13 +23,14 @@ use self::ecall::*;
 static ALLOCATOR: allocator::CAlloc = allocator::CAlloc;
 
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SdkError {
     KeyGeneration,
     InvalidPublicKey,
     PathDerivation,
     Signature,
     SignatureVerification,
+    GenericError,
 }
 
 impl fmt::Display for SdkError {
@@ -38,6 +41,7 @@ impl fmt::Display for SdkError {
             SdkError::PathDerivation => write!(f, "path derivation"),
             SdkError::Signature => write!(f, "signature"),
             SdkError::SignatureVerification => write!(f, "signature verification"),
+            SdkError::GenericError => write!(f, "generic error"),
         }
     }
 }
