@@ -17,6 +17,7 @@ extern crate core;
 #[cfg(test)]
 extern crate base64;
 
+mod comm;
 mod constants;
 mod crypto;
 mod error;
@@ -131,8 +132,7 @@ pub fn main(_: isize, _: *const *const u8) -> isize {
 
     vanadium_sdk::ux::ux_idle();
     loop {
-        // TODO: xrecv currently allocates up to the specified size; we would like to adjust dynamically
-        let buffer = vanadium_sdk::xrecv(2048);
+        let buffer = comm::receive_message().unwrap(); // TODO: what to do on error?
 
         vanadium_sdk::ux::app_loading_start("Handling request...\x00");
 
@@ -141,6 +141,6 @@ pub fn main(_: isize, _: *const *const u8) -> isize {
         vanadium_sdk::ux::app_loading_stop();
         vanadium_sdk::ux::ux_idle();
 
-        vanadium_sdk::xsend(&result);
+        comm::send_message(&result).unwrap(); // TODO: what to do on error?
     }
 }

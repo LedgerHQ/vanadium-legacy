@@ -26,6 +26,8 @@ import stream  # noqa: E402
 
 logging.basicConfig(filename='bitcoin.log', level=logging.DEBUG)
 
+ACK = b'\x42'
+
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
@@ -36,6 +38,44 @@ class dotdict(dict):
 
 # TODO: separate BTC class from the cli
 class Btc:
+    def __init__(self, streamer):
+        self.streamer = streamer
+
+    def exchange_message(self, data: bytes) -> bytes:
+        # Encode the length of the data as a 4-byte big-endian integer
+        length_encoded = len(data).to_bytes(4, 'big')
+
+        # Construct the complete message
+        full_message = length_encoded + data
+        response_data = b''
+
+        # Send the message in chunks of up to 256 bytes
+        for i in range(0, len(full_message), 256):
+            chunk = full_message[i:i+256]
+            response = self.streamer.exchange(chunk)
+
+            # If we're sending the last chunk, the response will be the start of the actual response
+            # Otherwise, the response should be a single byte 0x42.
+            if i + 256 >= len(full_message):
+                response_data = response
+            elif response != ACK:
+                raise ValueError('Unexpected data received before message transmission was complete.')
+
+        if len(response_data) < 4:
+            raise ValueError('Incomplete length received in response.')
+
+        # Extract the expected length of the full response
+        response_length = int.from_bytes(response_data[:4], 'big')
+        response_data = response_data[4:]
+
+        # Continue receiving data until the full response is retrieved
+        while len(response_data) < response_length:
+            chunk = self.streamer.exchange(ACK)  # Request more of the response
+            response_data += chunk
+
+        # Return the complete response
+        return response_data[:response_length]
+
     def get_version_prepare_request(self, args: dotdict):
         get_version = RequestGetVersion()
         message = Request()
@@ -217,11 +257,10 @@ if __name__ == "__main__":
     history = FileHistory('.cli-history')
 
     with stream.get_streamer(args) as streamer:
-
-        btc = Btc()
+        btc = Btc(streamer)
 
         # Run get_version to make sure the app starts
-        streamer.exchange(btc.get_version_prepare_request(dotdict({})))
+        btc.exchange_message(btc.get_version_prepare_request(dotdict({})))
 
         last_command_time = None
         while True:
@@ -244,7 +283,7 @@ if __name__ == "__main__":
             # Get the necessary arguments from input_command_list
             args_dict = dotdict({})
             for item in input_line_list[1:]:
-                key, value = item.split('=')
+                key, value = item.split('=', 1)
                 args_dict[key] = value
 
             if action == "time":
@@ -262,7 +301,7 @@ if __name__ == "__main__":
                 request = prepare_request(args_dict)
 
                 time_start = time.time()
-                data: Optional[bytes] = streamer.exchange(request)
+                data: Optional[bytes] = btc.exchange_message(request)
                 last_command_time = time.time() - time_start
 
                 response = Response()
@@ -277,3 +316,4 @@ if __name__ == "__main__":
                     parse_response(response)
             except Exception as e:
                 print(f"An error occurred: {str(e)}")
+                raise e
