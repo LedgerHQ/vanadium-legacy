@@ -80,10 +80,8 @@ pub fn handle_get_extended_pubkey<'a>(
     // Checksum
     serialized_pubkey.extend_from_slice(&get_checksum(&serialized_pubkey).to_be_bytes());
 
-    bitcoin::base58::encode(&serialized_pubkey);
-
     Ok(ResponseGetExtendedPubkey {
-        pubkey: Cow::Owned(bitcoin::base58::encode(&serialized_pubkey)),
+        pubkey: Cow::Owned(vanadium_sdk::base58::encode(&serialized_pubkey).expect("It will never fail")),
     })
 }
 

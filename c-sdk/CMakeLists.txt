@@ -178,8 +178,10 @@ else()
     native/ecall-vm.c
     sdk.c
     uint256.c
+    ../../vm/src/base58.c
     ../../vm/src/ecall_bolos.c
     ../../vm/src/ecall_hash.c
+    ../../vm/src/segwit_addr.c
     ../../vm/src/uint256.c
     )
 

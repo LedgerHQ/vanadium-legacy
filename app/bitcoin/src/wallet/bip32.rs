@@ -102,7 +102,10 @@ impl ExtendedPubKey {
 
 impl fmt::Display for ExtendedPubKey {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        bitcoin::base58::encode_check_to_fmt(fmt, &self.encode()[..])
+        let serialized = self.encode();
+        let encoded = vanadium_sdk::base58::encode_check(&serialized).expect("Will never fail");
+
+        fmt.write_str(&encoded)
     }
 }
 
@@ -110,7 +113,7 @@ impl FromStr for ExtendedPubKey {
     type Err = Error;
 
     fn from_str(inp: &str) -> Result<ExtendedPubKey, Error> {
-        let data = bitcoin::base58::decode_check(inp)
+        let data = vanadium_sdk::base58::decode_check(inp)
             .map_err(|_| Error::Base58Error)?;
 
         if data.len() != 78 {

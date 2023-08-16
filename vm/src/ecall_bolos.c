@@ -12,6 +12,9 @@
 
 #include "api/ecall-nr.h"
 
+#include "base58.h"
+#include "segwit_addr.h"
+
 bool sys_derive_node_bip32(eret_t *eret, cx_curve_t curve, guest_pointer_t p_path, size_t path_count, guest_pointer_t p_private_key, guest_pointer_t p_chain)
 {
     const unsigned int path[10];
@@ -503,10 +506,93 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
 
     // the first 4 bytes are the fingerprint
     if (!copy_host_buffer(p_out, hash, 4)) {
-        eret->success = false;
         return false;
     }
 
     eret->success = true;
+    return true;
+}
+
+// TODO: maybe add an additional param, e.g. for the HRP in bech32m? Unsure
+// BASE58ENCODE
+// BASE58DECODE
+// SEGWITADDRENCODETESTNET
+// SEGWITADDRENCODEMAINNET
+bool sys_convert(eret_t *eret, FormatConversion format, const guest_pointer_t p_src, size_t src_len, guest_pointer_t p_dst, size_t dst_max_len) {
+    uint8_t src[128];
+    uint8_t dst[128];
+
+    eret->size = 0; // size 0 signals failure for this ecall
+
+    if (src_len > sizeof(src) || dst_max_len > sizeof(dst)) {
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_src, &src, sizeof(src))) {
+        return false;
+    }    
+
+    int actual_output_len = -1; // -1 signals errors
+    switch(format) {
+        case BASE58ENCODE:
+            actual_output_len = base58_encode(src, src_len, (char *)dst, dst_max_len);
+            break;
+        case BASE58DECODE:
+            actual_output_len = base58_decode((const char*)src, src_len, dst, dst_max_len);
+            break;
+        case SEGWITADDRMAINNET:
+        case SEGWITADDRTESTNET:
+            if (src_len < 4 || src_len > 42) {
+                return true; // invalid segwit scriptPubkey
+            }
+            if (dst_max_len < 73 + 2) {
+                return true; // 73 + strlen(hrp); here hrp is "bc" or "tb"
+            }
+
+            int segwit_ver;
+            if (src[0] == 0) {
+                segwit_ver = 0;
+            } else if (src[0] >= 0x51 && src[0] <= 0x60) {
+                segwit_ver = src[0] - 0x50;
+            } else {
+                return true; // invalid segwit script
+            }
+
+            size_t prog_len = src[1];
+            if (src_len != prog_len + 2) {
+                return true; // length mismatch
+            }
+
+            if (segwit_addr_encode(
+                (char *)dst,
+                format == SEGWITADDRMAINNET ? "bc" : "tb",
+                segwit_ver,
+                src + 2,
+                prog_len) != 1)
+            {
+                actual_output_len = -1;
+                break;
+            }
+            // since segwit_addr_encode succeded, we know the output is a valid 0-terminated string
+            actual_output_len = (int)strlen((const char *)dst); 
+            break;
+        default:
+            return true; // unknown format
+    }
+
+    if (actual_output_len < 0) {
+        return true;
+    }
+
+    if (dst_max_len < (size_t)actual_output_len + 1) {
+        return true;
+    }
+    dst[actual_output_len] = '\0';
+
+    if (!copy_host_buffer(p_dst, dst, actual_output_len + 1)) {
+        return false;
+    }
+
+    eret->size = (size_t)actual_output_len;
     return true;
 }

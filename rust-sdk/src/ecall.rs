@@ -1,6 +1,14 @@
 use crate::crypto::{CtxHashGuest, CxCurve, CxHashId, CxMd, EcfpPrivateKey, EcfpPublicKey};
 use crate::ux::BaglComponent;
 
+#[repr(C)]
+pub enum FormatConversion {
+    BASE58ENCODE = 0,
+    BASE58DECODE = 1,
+    SEGWITADDRMAINNET = 2,
+    SEGWITADDRTESTNET = 3,
+}
+
 extern "C" {
     pub fn ecall_app_loading_start(status: *const u8);
     pub fn ecall_app_loading_stop() -> bool;
@@ -108,4 +116,12 @@ extern "C" {
         m: *const u8,
         len: usize,
     ) -> bool;
+
+    pub fn ecall_convert(
+        format: FormatConversion,
+        src: *const u8,
+        src_len: usize,
+        dst: *mut u8,
+        dst_max_len: usize,
+    ) -> usize;
 }

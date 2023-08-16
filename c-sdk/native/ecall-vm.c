@@ -190,3 +190,13 @@ bool ecall_get_master_fingerprint(uint32_t *out)
 
     return eret.success;
 }
+
+size_t ecall_convert(uint32_t format, const char *src, size_t src_len, char *dst, size_t dst_max_len)
+{
+    eret_t eret;
+
+    if (!sys_convert(&eret, format, NP(src), src_len, NP(dst), dst_max_len)) {
+        errx(1, "sys_convert failed");
+    }
+    return eret.size;
+}

@@ -118,6 +118,9 @@ bool ecall(struct rv_cpu *cpu)
     case ECALL_HASH_FINAL:
         success = sys_hash_final(ERET(RV_REG_A0), cpu->regs[RV_REG_A0], GP(RV_REG_A1), GP(RV_REG_A2));
         break;
+    case ECALL_CONVERT:
+        success = sys_convert(ERET(RV_REG_A0), cpu->regs[RV_REG_A0], GP(RV_REG_A1), cpu->regs[RV_REG_A2], GP(RV_REG_A3), cpu->regs[RV_REG_A4]);
+        break;
     default:
         sys_exit(0xdeaddead);
         success = false;
