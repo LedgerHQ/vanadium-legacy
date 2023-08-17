@@ -166,6 +166,7 @@ class Btc:
         get_wallet_address.name = args.get("name", "")
         get_wallet_address.descriptor_template = args.descriptor_template
         get_wallet_address.keys_info.extend(keys_info)
+        get_wallet_address.wallet_hmac = bytes.fromhex(args.get("hmac", ""))
         get_wallet_address.change = int(args.get("change", "0"))
         get_wallet_address.address_index = int(args.get("address_index", "0"))
         message = Request()
@@ -198,6 +199,7 @@ class Btc:
         sign_psbt.name = args.get("name", "")
         sign_psbt.descriptor_template = args.descriptor_template
         sign_psbt.keys_info.extend(keys_info)
+        sign_psbt.wallet_hmac = bytes.fromhex(args.get("hmac", ""))
         sign_psbt.psbt = base64.b64decode(args.psbt)
         message = Request()
         message.sign_psbt.CopyFrom(sign_psbt)
@@ -225,8 +227,8 @@ class ActionArgumentCompleter(Completer):
         "get_master_fingerprint": [],
         "get_extended_pubkey": ["display", "path="],
         "register_wallet": ["name=", "descriptor_template=", "keys_info="],
-        "get_wallet_address": ["name=", "descriptor_template=", "keys_info=", "change=", "address_index="],
-        "sign_psbt": ["name=", "descriptor_template=", "keys_info=", "psbt="],
+        "get_wallet_address": ["name=", "descriptor_template=", "keys_info=", "change=", "address_index=", "hmac="],
+        "sign_psbt": ["name=", "descriptor_template=", "keys_info=", "psbt=", "hmac="],
     }
 
     def get_completions(self, document, complete_event):
