@@ -116,11 +116,10 @@ class DeviceStream:
             assert entry.addr == request.addr
             assert entry.counter == page.iv
 
-            # TODO: handle larger proofs
-            assert len(proof) <= 250
+            assert len(proof) <= 20*33
             data += n_proof_elements.to_bytes(1, "big")
             data += proof
- 
+
         apdu = self.client.exchange(0x01, data=data)
 
         return apdu
@@ -146,8 +145,7 @@ class DeviceStream:
 
         self._write_page(request.addr, page_data, request.mac, request.iv)
 
-        # TODO: handle larger proofs
-        assert len(proof) <= 250
+        assert len(proof) <= 20*33
 
         data = n_proof_elements.to_bytes(1, "big") + proof
         return self.client.exchange(0x02, data=data)

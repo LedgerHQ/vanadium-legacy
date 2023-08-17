@@ -29,7 +29,7 @@ enum cmd_stream_e {
     CMD_REQUEST_APP_HMAC = 0x6802,
 };
 
-#define MAX_APDU_DATA_SIZE 548 // TODO
+#define MAX_APDU_DATA_SIZE 958
 
 // Note that this diverges from the standard APDU message format used in most apps
 struct apdu_s {
