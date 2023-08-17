@@ -111,14 +111,15 @@ class DeviceStream:
 
         # 5. add merkle proof if appropriate
         if not page.read_only:
-            entry, proof = self.merkletree.get_proof(request.addr)
+            entry, proof, n_proof_elements = self.merkletree.get_proof(request.addr)
+
             assert entry.addr == request.addr
             assert entry.counter == page.iv
 
-            # TODO: handle larger proofs
-            assert len(proof) <= 250
+            assert len(proof) <= 20*33
+            data += n_proof_elements.to_bytes(1, "big")
             data += proof
- 
+
         apdu = self.client.exchange(0x01, data=data)
 
         return apdu
@@ -135,19 +136,19 @@ class DeviceStream:
         # 3. commit page and send merkle proof
         if self.merkletree.has_addr(request.addr):
             # proof of previous value
-            entry, proof = self.merkletree.get_proof(request.addr)
+            entry, proof, n_proof_elements = self.merkletree.get_proof(request.addr)
             assert entry.addr == request.addr
             assert entry.counter + 1 == request.iv
         else:
             # proof of last entry
-            entry, proof = self.merkletree.get_proof_of_last_entry()
+            entry, proof, n_proof_elements = self.merkletree.get_proof_of_last_entry()
 
         self._write_page(request.addr, page_data, request.mac, request.iv)
 
-        # TODO: handle larger proofs
-        assert len(proof) <= 250
+        assert len(proof) <= 20*33
 
-        return self.client.exchange(0x02, data=proof)
+        data = n_proof_elements.to_bytes(1, "big") + proof
+        return self.client.exchange(0x02, data=data)
 
     def handle_send_buffer(self, data: bytes) -> bool:
         logger.debug(f"got buffer {data!r}")

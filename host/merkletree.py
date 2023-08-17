@@ -104,23 +104,23 @@ class MerkleTree:
             else:
                 return MerkleTree._path(m - k, entries[k:]) + b"L" + MerkleTree.mth(entries[:k])
 
-    def get_proof(self, addr: int) -> Tuple[Entry, bytes]:
+    def get_proof(self, addr: int) -> Tuple[Entry, bytes, int]:
         m = self._find_index_by_addr(addr)
         assert m != -1
 
         proof = MerkleTree._path(m, self.entries)
         assert len(proof) % 33 == 0
 
-        return Entry(self.entries[m]), proof
+        return Entry(self.entries[m]), proof, len(proof) // 33
 
-    def get_proof_of_last_entry(self) -> Tuple[Entry, bytes]:
+    def get_proof_of_last_entry(self) -> Tuple[Entry, bytes, int]:
         assert len(self.entries) > 0
 
         m = len(self.entries) - 1
         proof = MerkleTree._path(m, self.entries)
         assert len(proof) % 33 == 0
 
-        return Entry(self.entries[m]), proof
+        return Entry(self.entries[m]), proof, len(proof) // 33
 
     def has_addr(self, addr: int) -> bool:
         m = self._find_index_by_addr(addr)
