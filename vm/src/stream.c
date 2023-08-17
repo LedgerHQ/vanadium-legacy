@@ -170,14 +170,32 @@ bool stream_request_page(struct page_s *page, const uint32_t addr, const bool re
     }
 
     size_t count = apdu->data[PAGE_SIZE + sizeof(struct response_hmac_s)];
-    struct proof_s *proof_ptr = (struct proof_s *)&apdu->data[PAGE_SIZE + sizeof(struct response_hmac_s) + 1];
+    uint8_t *proof_bytes_ptr = &apdu->data[PAGE_SIZE + sizeof(struct response_hmac_s) + 1];
 
-    if (count * sizeof(struct proof_s) != (apdu->lc - PAGE_SIZE - sizeof(struct response_hmac_s) - 1)) {
-        err("merkle proof length mismatch\n");
-        return false;
+    size_t partial_proof_bytes_len = apdu->lc - PAGE_SIZE - sizeof(struct response_hmac_s) - 1;
+
+
+    // The proof might not fit in a single message; therefore, we might have to keep internal state
+    // while getting the rest of the proof
+
+
+    uint8_t digest[CX_SHA256_SIZE];
+    init_digest(digest, &entry);
+
+    int partial_count = update_with_partial_proof(digest, proof_bytes_ptr, partial_proof_bytes_len);
+    if (partial_count < 0) {
+        err("Invalid Merkle proof length: not a multiple of a single proof element size\n");
+    } else if ((size_t)partial_count > count) {
+        err("Too many elements in Merkle proof\n");
     }
 
-    if (!merkle_verify_proof(&entry, proof_ptr, count)) {
+    count -= (size_t)partial_count;
+
+    while (count > 0) {
+        // TODO: get more elements
+    }
+
+    if (!compare_merkle_root_with_digest(&digest)) {
         err("invalid iv (merkle proof)\n");
         return false;
     }

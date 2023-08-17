@@ -138,3 +138,41 @@ void init_merkle_tree(const uint8_t *root_hash_init,
     memcpy(&ctx.last_entry, last_entry_init, sizeof(ctx.last_entry));
     ctx.n = merkle_tree_size;
 }
+
+
+
+void init_digest(uint8_t digest[static CX_SHA256_SIZE], const struct entry_s *entry) {
+    hash_entry(entry, digest);
+}
+
+int update_with_partial_proof(uint8_t digest[static CX_SHA256_SIZE], uint8_t *proof_bytes, size_t proof_bytes_len) {
+    struct proof_s *proof_ptr = (struct proof_s *)proof_bytes;
+    int count = 0;
+    while (proof_bytes_len >= sizeof(struct proof_s)) {
+        const uint8_t *left, *right;
+
+        if (proof_ptr->op == 'L') {
+            left = proof_ptr->digest;
+            right = digest;
+        } else {
+            left = digest;
+            right = proof_ptr->digest;
+        }
+
+        hash_nodes(left, right, digest);
+
+        proof_bytes_len -= sizeof(struct proof_s);
+        ++count;
+        ++proof_ptr;
+    }
+
+    if (proof_bytes_len != 0) {
+        // invalid proof length
+        return -1;
+    }
+    return count;
+}
+
+bool compare_merkle_root_with_digest(uint8_t digest[static CX_SHA256_SIZE]) {
+    return memcmp(digest, ctx.root_hash, sizeof(ctx.root_hash)) == 0;
+}
