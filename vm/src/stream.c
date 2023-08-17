@@ -169,8 +169,15 @@ bool stream_request_page(struct page_s *page, const uint32_t addr, const bool re
         return true;
     }
 
-    size_t count = (apdu->lc - PAGE_SIZE - sizeof(struct response_hmac_s)) / sizeof(struct proof_s);
-    if (!merkle_verify_proof(&entry, (struct proof_s *)&apdu->data[PAGE_SIZE + sizeof(struct response_hmac_s)], count)) {
+    size_t count = apdu->data[PAGE_SIZE + sizeof(struct response_hmac_s)];
+    struct proof_s *proof_ptr = (struct proof_s *)&apdu->data[PAGE_SIZE + sizeof(struct response_hmac_s) + 1];
+
+    if (count * sizeof(struct proof_s) != (apdu->lc - PAGE_SIZE - sizeof(struct response_hmac_s) - 1)) {
+        err("merkle proof length mismatch\n");
+        return false;
+    }
+
+    if (!merkle_verify_proof(&entry, proof_ptr, count)) {
         err("invalid iv (merkle proof)\n");
         return false;
     }
@@ -221,16 +228,16 @@ bool stream_commit_page(struct page_s *page, bool insert)
         return false;
     }
 
-    if ((apdu->lc % sizeof(struct proof_s)) != 0) {
+    size_t count = apdu->data[0];
+    if ((apdu->lc != 1 + count * sizeof(struct proof_s)) != 0) {
         err("invalid proof size\n");
         return false;
     }
 
     /* 3. update merkle tree */
-    size_t count = apdu->lc / sizeof(struct proof_s);
-
+    struct proof_s *proof_ptr = (struct proof_s *)&apdu->data[1];
     if (insert) {
-        if (!merkle_insert(&entry, (struct proof_s *)&apdu->data, count)) {
+        if (!merkle_insert(&entry, proof_ptr, count)) {
             err("merkle insert failed\n");
             return false;
         }
@@ -238,7 +245,7 @@ bool stream_commit_page(struct page_s *page, bool insert)
         struct entry_s old_entry;
         old_entry.addr = page->addr;
         old_entry.iv = page->iv - 1;
-        if (!merkle_update(&old_entry, &entry, (struct proof_s *)&apdu->data, count)) {
+        if (!merkle_update(&old_entry, &entry, proof_ptr, count)) {
             err("merkle update failed\n");
             return false;
         }
