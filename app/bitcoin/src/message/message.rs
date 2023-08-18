@@ -459,6 +459,112 @@ impl<'a> MessageWrite for ResponseSignPsbt<'a> {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct RequestGetLatestBlockHeader { }
+
+impl<'a> MessageRead<'a> for RequestGetLatestBlockHeader {
+    fn from_reader(r: &mut BytesReader, _: &[u8]) -> Result<Self> {
+        r.read_to_end();
+        Ok(Self::default())
+    }
+}
+
+impl MessageWrite for RequestGetLatestBlockHeader { }
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct ResponseGetLatestBlockHeader<'a> {
+    pub height: u32,
+    pub block_hash: Cow<'a, [u8]>,
+    pub block_header: Cow<'a, [u8]>,
+}
+
+impl<'a> MessageRead<'a> for ResponseGetLatestBlockHeader<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.height = r.read_uint32(bytes)?,
+                Ok(18) => msg.block_hash = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.block_header = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for ResponseGetLatestBlockHeader<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.height == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.height) as u64) }
+        + if self.block_hash == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.block_hash).len()) }
+        + if self.block_header == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.block_header).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.height != 0u32 { w.write_with_tag(8, |w| w.write_uint32(*&self.height))?; }
+        if self.block_hash != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.block_hash))?; }
+        if self.block_header != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.block_header))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct RequestSetLatestBlockHeader<'a> {
+    pub height: u32,
+    pub block_hash: Cow<'a, [u8]>,
+    pub block_header: Cow<'a, [u8]>,
+}
+
+impl<'a> MessageRead<'a> for RequestSetLatestBlockHeader<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.height = r.read_uint32(bytes)?,
+                Ok(18) => msg.block_hash = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.block_header = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for RequestSetLatestBlockHeader<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.height == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.height) as u64) }
+        + if self.block_hash == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.block_hash).len()) }
+        + if self.block_header == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.block_header).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.height != 0u32 { w.write_with_tag(8, |w| w.write_uint32(*&self.height))?; }
+        if self.block_hash != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.block_hash))?; }
+        if self.block_header != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.block_header))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct ResponseSetLatestBlockHeader { }
+
+impl<'a> MessageRead<'a> for ResponseSetLatestBlockHeader {
+    fn from_reader(r: &mut BytesReader, _: &[u8]) -> Result<Self> {
+        r.read_to_end();
+        Ok(Self::default())
+    }
+}
+
+impl MessageWrite for ResponseSetLatestBlockHeader { }
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct ResponseError<'a> {
     pub error_msg: Cow<'a, str>,
 }
@@ -506,6 +612,8 @@ impl<'a> MessageRead<'a> for Request<'a> {
                 Ok(34) => msg.request = mod_Request::OneOfrequest::register_wallet(r.read_message::<RequestRegisterWallet>(bytes)?),
                 Ok(42) => msg.request = mod_Request::OneOfrequest::get_wallet_address(r.read_message::<RequestGetWalletAddress>(bytes)?),
                 Ok(50) => msg.request = mod_Request::OneOfrequest::sign_psbt(r.read_message::<RequestSignPsbt>(bytes)?),
+                Ok(58) => msg.request = mod_Request::OneOfrequest::get_latest_block_header(r.read_message::<RequestGetLatestBlockHeader>(bytes)?),
+                Ok(66) => msg.request = mod_Request::OneOfrequest::set_latest_block_header(r.read_message::<RequestSetLatestBlockHeader>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -524,6 +632,8 @@ impl<'a> MessageWrite for Request<'a> {
             mod_Request::OneOfrequest::register_wallet(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::get_wallet_address(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::sign_psbt(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Request::OneOfrequest::get_latest_block_header(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Request::OneOfrequest::set_latest_block_header(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Request::OneOfrequest::None => 0,
     }    }
 
@@ -534,6 +644,8 @@ impl<'a> MessageWrite for Request<'a> {
             mod_Request::OneOfrequest::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::get_wallet_address(ref m) => { w.write_with_tag(42, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::sign_psbt(ref m) => { w.write_with_tag(50, |w| w.write_message(m))? },
+            mod_Request::OneOfrequest::get_latest_block_header(ref m) => { w.write_with_tag(58, |w| w.write_message(m))? },
+            mod_Request::OneOfrequest::set_latest_block_header(ref m) => { w.write_with_tag(66, |w| w.write_message(m))? },
             mod_Request::OneOfrequest::None => {},
     }        Ok(())
     }
@@ -552,6 +664,8 @@ pub enum OneOfrequest<'a> {
     register_wallet(RequestRegisterWallet<'a>),
     get_wallet_address(RequestGetWalletAddress<'a>),
     sign_psbt(RequestSignPsbt<'a>),
+    get_latest_block_header(RequestGetLatestBlockHeader),
+    set_latest_block_header(RequestSetLatestBlockHeader<'a>),
     None,
 }
 
@@ -580,7 +694,9 @@ impl<'a> MessageRead<'a> for Response<'a> {
                 Ok(34) => msg.response = mod_Response::OneOfresponse::register_wallet(r.read_message::<ResponseRegisterWallet>(bytes)?),
                 Ok(42) => msg.response = mod_Response::OneOfresponse::get_wallet_address(r.read_message::<ResponseGetWalletAddress>(bytes)?),
                 Ok(50) => msg.response = mod_Response::OneOfresponse::sign_psbt(r.read_message::<ResponseSignPsbt>(bytes)?),
-                Ok(58) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
+                Ok(58) => msg.response = mod_Response::OneOfresponse::get_latest_block_header(r.read_message::<ResponseGetLatestBlockHeader>(bytes)?),
+                Ok(66) => msg.response = mod_Response::OneOfresponse::set_latest_block_header(r.read_message::<ResponseSetLatestBlockHeader>(bytes)?),
+                Ok(74) => msg.response = mod_Response::OneOfresponse::error(r.read_message::<ResponseError>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -599,6 +715,8 @@ impl<'a> MessageWrite for Response<'a> {
             mod_Response::OneOfresponse::register_wallet(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::get_wallet_address(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::sign_psbt(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Response::OneOfresponse::get_latest_block_header(ref m) => 1 + sizeof_len((m).get_size()),
+            mod_Response::OneOfresponse::set_latest_block_header(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::error(ref m) => 1 + sizeof_len((m).get_size()),
             mod_Response::OneOfresponse::None => 0,
     }    }
@@ -610,7 +728,9 @@ impl<'a> MessageWrite for Response<'a> {
             mod_Response::OneOfresponse::register_wallet(ref m) => { w.write_with_tag(34, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::get_wallet_address(ref m) => { w.write_with_tag(42, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::sign_psbt(ref m) => { w.write_with_tag(50, |w| w.write_message(m))? },
-            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(58, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::get_latest_block_header(ref m) => { w.write_with_tag(58, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::set_latest_block_header(ref m) => { w.write_with_tag(66, |w| w.write_message(m))? },
+            mod_Response::OneOfresponse::error(ref m) => { w.write_with_tag(74, |w| w.write_message(m))? },
             mod_Response::OneOfresponse::None => {},
     }        Ok(())
     }
@@ -629,6 +749,8 @@ pub enum OneOfresponse<'a> {
     register_wallet(ResponseRegisterWallet<'a>),
     get_wallet_address(ResponseGetWalletAddress<'a>),
     sign_psbt(ResponseSignPsbt<'a>),
+    get_latest_block_header(ResponseGetLatestBlockHeader<'a>),
+    set_latest_block_header(ResponseSetLatestBlockHeader),
     error(ResponseError<'a>),
     None,
 }

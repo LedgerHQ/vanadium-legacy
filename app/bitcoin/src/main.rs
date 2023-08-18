@@ -27,6 +27,8 @@ mod ui;
 mod version;
 mod wallet;
 
+mod state;
+
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
 use alloc::vec;
@@ -57,7 +59,7 @@ impl From<&'static str> for ResponseError<'_> {
     }
 }
 
-fn handle_req_(buffer: &[u8]) -> Result<Response> {
+fn handle_req_< 'a, 'b, 'c >(buffer: &'a [u8], app_state: &'b mut state::AppState) -> Result<Response<'c>> {
     let pb_bytes = buffer.to_vec();
     let mut reader = BytesReader::from_bytes(&pb_bytes);
     let request: Request = Request::from_reader(&mut reader, &pb_bytes)?;
@@ -78,6 +80,8 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
                 OneOfresponse::get_wallet_address(handle_get_wallet_address(req)?)
             }
             OneOfrequest::sign_psbt(req) => OneOfresponse::sign_psbt(handle_sign_psbt(req)?),
+            OneOfrequest::get_latest_block_header(req) => OneOfresponse::get_latest_block_header(handle_get_latest_block_header(req, app_state)?),
+            OneOfrequest::set_latest_block_header(req) => OneOfresponse::set_latest_block_header(handle_set_latest_block_header(req, app_state)?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };
@@ -85,10 +89,10 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
     Ok(response)
 }
 
-fn handle_req(buffer: &[u8]) -> Vec<u8> {
+fn handle_req(buffer: &[u8], app_state: &mut state::AppState) -> Vec<u8> {
     let error_msg: String;
 
-    let response = match handle_req_(buffer) {
+    let response = match handle_req_(buffer, app_state) {
         Ok(response) => response,
         Err(error) => {
             error_msg = error.to_string();
@@ -130,13 +134,19 @@ pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
 pub fn main(_: isize, _: *const *const u8) -> isize {
     version::setup_app();
 
+    let mut app_state = state::AppState {
+        current_block_height: 0,
+        current_block_hash: hex_literal::hex!("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"),
+        current_block_header: hex_literal::hex!("0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4adae5494dffff001d1aa4ae18"),
+    };
+
     vanadium_sdk::ux::ux_idle();
     loop {
         let buffer = comm::receive_message().unwrap(); // TODO: what to do on error?
 
         vanadium_sdk::ux::app_loading_start("Handling request...\x00");
 
-        let result = handle_req(&buffer);
+        let result = handle_req(&buffer, &mut app_state);
 
         vanadium_sdk::ux::app_loading_stop();
         vanadium_sdk::ux::ux_idle();

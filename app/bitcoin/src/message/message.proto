@@ -66,6 +66,24 @@ message ResponseSignPsbt {
   repeated PartialSignature partial_signatures = 1;
 }
 
+message RequestGetLatestBlockHeader {
+}
+
+message ResponseGetLatestBlockHeader {
+  uint32 height = 1;
+  bytes block_hash = 2;
+  bytes block_header = 3;
+}
+
+message RequestSetLatestBlockHeader {
+  uint32 height = 1;
+  bytes block_hash = 2;
+  bytes block_header = 3;
+}
+
+message ResponseSetLatestBlockHeader {
+}
+
 
 message ResponseError {
   string error_msg = 1;
@@ -79,6 +97,8 @@ message Request {
     RequestRegisterWallet register_wallet = 4;
     RequestGetWalletAddress get_wallet_address = 5;
     RequestSignPsbt sign_psbt = 6;
+    RequestGetLatestBlockHeader get_latest_block_header = 7;
+    RequestSetLatestBlockHeader set_latest_block_header = 8;
   }
 }
 
@@ -90,6 +110,8 @@ message Response {
     ResponseRegisterWallet register_wallet = 4;
     ResponseGetWalletAddress get_wallet_address = 5;
     ResponseSignPsbt sign_psbt = 6;
-    ResponseError error = 7;
+    ResponseGetLatestBlockHeader get_latest_block_header = 7;
+    ResponseSetLatestBlockHeader set_latest_block_header = 8;
+    ResponseError error = 9;
   }
 }

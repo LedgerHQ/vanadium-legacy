@@ -15,8 +15,11 @@ from prompt_toolkit.history import FileHistory
 from argparse import ArgumentParser
 from typing import Optional
 
-from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestGetExtendedPubkey, RequestRegisterWallet, RequestGetWalletAddress, RequestSignPsbt, Request, Response
+from message_pb2 import RequestGetVersion, RequestGetMasterFingerprint, RequestGetExtendedPubkey, RequestRegisterWallet, RequestGetWalletAddress, RequestSignPsbt, RequestGetLatestBlockHeader, RequestSetLatestBlockHeader, Request, Response
 from util import bip32_path_to_list
+
+from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
+
 
 # TODO: make a proper package for the stream.py module
 sys.path.append(os.path.join(os.path.dirname(
@@ -220,6 +223,87 @@ class Btc:
 
         return
 
+    def get_latest_block_header_prepare_request(self, args: dotdict):
+        message = Request()
+        message.get_latest_block_header.CopyFrom(RequestGetLatestBlockHeader())
+
+        assert message.WhichOneof("request") == "get_latest_block_header"
+        return message.SerializeToString()
+
+    def get_latest_block_header_parse_response(self, response):
+        response = Response()
+        response.ParseFromString(data)
+        assert response.WhichOneof("response") == "get_latest_block_header"
+
+        print(f"Height: {response.get_latest_block_header.height}")
+        print(f"Block hash: {response.get_latest_block_header.block_hash.hex()}")
+        print(f"Block header: {response.get_latest_block_header.block_header.hex()}")
+
+        return
+
+    def set_latest_block_header_prepare_request(self, args: dotdict):
+        for arg in ['height', 'hash', 'height']:
+            if args[arg] is None:
+                raise ValueError(f"Missing {arg}")
+
+        set_latest_block_header = RequestSetLatestBlockHeader()
+        set_latest_block_header.height = int(args.get("height"))
+        set_latest_block_header.block_hash = bytes.fromhex(args.get("hash"))
+        set_latest_block_header.block_header = bytes.fromhex(args.get("header"))
+        message = Request()
+        message.set_latest_block_header.CopyFrom(set_latest_block_header)
+
+        assert message.WhichOneof("request") == "set_latest_block_header"
+        return message.SerializeToString()
+
+    def set_latest_block_header_parse_response(self, response):
+        response = Response()
+        response.ParseFromString(data)
+        assert response.WhichOneof("response") == "set_latest_block_header"
+
+        print("Done")
+
+        return
+
+
+def sync_headers(btc: Btc):
+    rpc_user = "spider"
+    rpc_password = "weesohB4"
+    rpc_host = "127.0.0.1"
+    rpc_port = "18332"
+
+    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
+
+    resp = btc.exchange_message(btc.get_latest_block_header_prepare_request({}))
+    response = Response()
+    response.ParseFromString(resp)
+
+    app_height: int = response.get_latest_block_header.height
+    cur_height = rpc.getblockcount()
+
+    start_time = time.time()
+
+    for i in range(app_height + 1, cur_height):
+        block_hash = rpc.getblockhash(i)
+        block_header = rpc.getblockheader(block_hash, False)
+
+        resp = btc.exchange_message(btc.set_latest_block_header_prepare_request(dotdict({
+            'height': str(i),
+            'hash': block_hash,
+            'header': block_header,
+        })))
+        response = Response()
+        response.ParseFromString(resp)
+        assert response.WhichOneof("response") == "set_latest_block_header"
+
+        if (i - app_height) % 1000 == 0:
+            elapsed_time = time.time() - start_time
+            progress_percentage = ((i - app_height) / (cur_height - app_height)) * 100
+            estimated_time = (elapsed_time / (i - app_height)) * (cur_height - i)
+
+            print(f"\rTime elapsed: {elapsed_time:.2f}s, Progress: {progress_percentage:.2f}%, Estimated completion time: {estimated_time:.2f}s", end="")
+
+    print("Done.")
 
 class ActionArgumentCompleter(Completer):
     ACTION_ARGUMENTS = {
@@ -229,6 +313,8 @@ class ActionArgumentCompleter(Completer):
         "register_wallet": ["name=", "descriptor_template=", "keys_info="],
         "get_wallet_address": ["name=", "descriptor_template=", "keys_info=", "change=", "address_index=", "hmac="],
         "sign_psbt": ["name=", "descriptor_template=", "keys_info=", "psbt=", "hmac="],
+        "get_latest_block_header": [],
+        "set_latest_block_header": ["height=", "hash=", "header="],
     }
 
     def get_completions(self, document, complete_event):
@@ -252,7 +338,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     actions = ["get_version", "get_master_fingerprint", "get_extended_pubkey",
-               "register_wallet", "get_wallet_address", "sign_psbt"]
+               "register_wallet", "get_wallet_address", "sign_psbt",
+               "get_latest_block_header", "set_latest_block_header"]
 
     completer = ActionArgumentCompleter()
     # Create a history object
@@ -290,6 +377,10 @@ if __name__ == "__main__":
 
             if action == "time":
                 print("Runtime of last command:", last_command_time)
+                continue
+
+            if action == "sync":
+                sync_headers(btc)
                 continue
 
             if action not in actions:
