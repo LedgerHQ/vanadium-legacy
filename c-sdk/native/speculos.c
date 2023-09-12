@@ -247,6 +247,16 @@ cx_err_t cx_bn_shr(cx_bn_t x, uint32_t n)
     return sys_cx_bn_shr(x, n);
 }
 
+cx_err_t cx_bn_xor(cx_bn_t r, const cx_bn_t a, const cx_bn_t b)
+{
+    return sys_cx_bn_xor(r, a, b);
+}
+
+cx_err_t cx_bn_mod_pow_bn(cx_bn_t r, const cx_bn_t a, const cx_bn_t e, const cx_bn_t n)
+{
+    return sys_cx_bn_mod_pow_bn(r, a, e, n);
+}
+
 cx_err_t cx_ecdomain_parameter(cx_curve_t cv, cx_curve_dom_param_t id, uint8_t *p, uint32_t p_len)
 {
     return sys_cx_ecdomain_parameter(cv, id, p, p_len);
@@ -271,10 +281,21 @@ cx_err_t cx_ecpoint_export_bn(const cx_ecpoint_t *P, cx_bn_t *x, cx_bn_t *y)
     return sys_cx_ecpoint_export_bn(P, x, y);
 }
 
+cx_err_t cx_ecpoint_is_on_curve(const cx_ecpoint_t *R, bool *is_on_curve)
+{
+    return sys_cx_ecpoint_is_on_curve(R, is_on_curve);
+}
+
 cx_err_t cx_ecpoint_is_at_infinity(const cx_ecpoint_t *R, bool *is_infinite)
 {
     return sys_cx_ecpoint_is_at_infinity(R, is_infinite);
 }
+
+cx_err_t cx_ecpoint_init_bn(cx_ecpoint_t *P, const cx_bn_t x, const cx_bn_t y)
+{
+    return sys_cx_ecpoint_init_bn(P, x, y);
+}
+
 
 cx_err_t cx_get_random_bytes(uint8_t *buffer, const size_t size)
 {
