@@ -69,6 +69,12 @@ bool sys_ecdsa_sign(eret_t *eret, const guest_pointer_t p_key, const int mode,
 bool sys_ecdsa_verify(eret_t *eret, const guest_pointer_t p_key,
                       const guest_pointer_t p_hash,
                       const guest_pointer_t p_sig, const size_t sig_len);
+bool sys_schnorr_sign(eret_t *eret, const guest_pointer_t p_key, uint32_t mode,
+                      const cx_md_t hash_id, const guest_pointer_t p_msg, size_t msg_len,
+                      guest_pointer_t p_sig, guest_pointer_t p_sig_len); // TODO: might want to make sig_len not a pointer
+bool sys_schnorr_verify(eret_t *eret, const guest_pointer_t p_key, uint32_t mode,
+                        const cx_md_t hash_id, const guest_pointer_t p_msg, size_t msg_len,
+                        const guest_pointer_t p_sig, size_t sig_len);
 bool sys_get_random_bytes(guest_pointer_t p_buffer, size_t size);
 bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len);
 bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len);

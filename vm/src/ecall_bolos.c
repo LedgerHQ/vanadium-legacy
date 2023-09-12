@@ -224,6 +224,85 @@ bool sys_ecdsa_verify(eret_t *eret, const guest_pointer_t p_key,
     return true;
 }
 
+// BIP0340 signatures are 64 bytes, but it's larger for other supported curves;
+// currently, no supported curve produces signatures longer than 72 bytes
+#define MAX_SCHNORR_SIGNATURE_SIZE 72
+
+bool sys_schnorr_sign(eret_t *eret, const guest_pointer_t p_key, uint32_t mode,
+                      const cx_md_t hash_id, const guest_pointer_t p_msg, size_t msg_len,
+                      guest_pointer_t p_sig, guest_pointer_t p_sig_len) {
+    cx_ecfp_private_key_t key;
+    uint8_t msg[128];
+    size_t sig_len;
+
+    eret->success = false;
+
+    if (!copy_guest_buffer(p_key, (void *)&key, sizeof(key))) {
+        return false;
+    }
+
+    if (msg_len > sizeof(msg)) {
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_msg, (void *)&msg, msg_len)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_sig_len, (void *)&sig_len, sizeof(sig_len))) {
+        return false;
+    }
+
+    uint8_t sig[MAX_SCHNORR_SIGNATURE_SIZE];
+    cx_err_t err = cx_ecschnorr_sign_no_throw(&key, mode, hash_id, msg, msg_len, sig, &sig_len);
+    if (err != CX_OK || sig_len > sizeof(sig)) {
+        return true;
+    }
+
+    if (!copy_host_buffer(p_sig, sig, sig_len)) {
+        return false;
+    }
+
+    if (!copy_host_buffer(p_sig_len, (void *)&sig_len, sig_len)) {
+        return false;
+    }
+
+    eret->success = true;
+    return true;
+}
+
+bool sys_schnorr_verify(eret_t *eret, const guest_pointer_t p_key, uint32_t mode,
+                        const cx_md_t hash_id, const guest_pointer_t p_msg, size_t msg_len,
+                        const guest_pointer_t p_sig, size_t sig_len) {
+    cx_ecfp_public_key_t key;
+    uint8_t msg[128];
+
+    eret->success = false;
+
+    if (!copy_guest_buffer(p_key, (void *)&key, sizeof(key))) {
+        return false;
+    }
+
+    if (msg_len > sizeof(msg)) {
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_msg, (void *)&msg, msg_len)) {
+        return false;
+    }
+
+    uint8_t sig[MAX_SCHNORR_SIGNATURE_SIZE];
+    if (sig_len > sizeof(sig)) {
+        return true;
+    }
+    if (!copy_guest_buffer(p_sig, sig, sig_len)) {
+        return false;
+    }
+
+    eret->success = cx_ecschnorr_verify(&key, mode, hash_id, msg, msg_len, sig, sig_len);
+    return true;
+}
+
 bool sys_get_random_bytes(guest_pointer_t p_buffer, size_t size)
 {
     while (size > 0) {

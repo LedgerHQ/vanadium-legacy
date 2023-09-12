@@ -91,6 +91,12 @@ bool ecall(struct rv_cpu *cpu)
     case ECALL_ECDSA_VERIFY:
         success = sys_ecdsa_verify(ERET(RV_REG_A0), GP(RV_REG_A0), GP(RV_REG_A1), GP(RV_REG_A2), cpu->regs[RV_REG_A3]);
         break;
+    case ECALL_SCHNORR_SIGN:
+        success = sys_schnorr_sign(ERET(RV_REG_A0), GP(RV_REG_A0), cpu->regs[RV_REG_A1], cpu->regs[RV_REG_A2], GP(RV_REG_A3), cpu->regs[RV_REG_A4], GP(RV_REG_A5), GP(RV_REG_A6));
+        break;
+    case ECALL_SCHNORR_VERIFY:
+        success = sys_schnorr_verify(ERET(RV_REG_A0), GP(RV_REG_A0), cpu->regs[RV_REG_A1], cpu->regs[RV_REG_A2], GP(RV_REG_A3), cpu->regs[RV_REG_A4], GP(RV_REG_A5), cpu->regs[RV_REG_A6]);
+        break;
     case ECALL_GET_RANDOM_BYTES:
         success = sys_get_random_bytes(GP(RV_REG_A0), cpu->regs[RV_REG_A1]);
         break;

@@ -91,7 +91,37 @@ bool ecall_cx_ecfp_scalar_mult(cx_curve_t curve, uint8_t *P, const uint8_t *k, s
     return eret.success;
 }
 
+bool ecall_schnorr_sign(const cx_ecfp_private_key_t *privkey,
+                        uint32_t mode,
+                        cx_md_t hash_id,
+                        const uint8_t *msg,
+                        size_t msg_len,
+                        uint8_t *sig,
+                        size_t *sig_len) {
+    eret_t eret;
 
+    if (!sys_schnorr_sign(&eret, NP(privkey), mode, hash_id, NP(msg), msg_len, NP(sig), NP(sig_len))) {
+        errx(1, "sys_schnorr_sign failed");
+    }
+
+    return eret.success;
+}
+
+bool ecall_schnorr_verify(const cx_ecfp_public_key_t *pubkey,
+                          uint32_t mode,
+                          cx_md_t hash_id,
+                          const uint8_t *msg,
+                          size_t msg_len,
+                          const uint8_t *sig,
+                          size_t sig_len) {
+    eret_t eret;
+
+    if (!sys_schnorr_verify(&eret, NP(pubkey), mode, hash_id, NP(msg), msg_len, NP(sig), sig_len)) {
+        errx(1, "sys_schnorr_verify failed");
+    }
+
+    return eret.success;
+}
 
 void ecall_get_random_bytes(uint8_t *buffer, const size_t size)
 {
