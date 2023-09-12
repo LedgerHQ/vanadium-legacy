@@ -413,7 +413,7 @@ impl EcfpPublicKey {
         xonly_key
     }
 
-    pub fn verify(&self, hash: &[u8; 32], sig: &[u8]) -> Result<(), SdkError> {
+    pub fn ecdsa_verify(&self, hash: &[u8; 32], sig: &[u8]) -> Result<(), SdkError> {
         if !unsafe { ecall_ecdsa_verify(self, hash.as_ptr(), sig.as_ptr(), sig.len()) } {
             Err(SdkError::SignatureVerification)
         } else {
@@ -517,7 +517,7 @@ impl EcfpPrivateKey {
     }
 
     // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?
-    pub fn sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<Vec<u8>, SdkError> {
+    pub fn ecdsa_sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<Vec<u8>, SdkError> {
         let mut sig = [0u8; 80];
         let sig_len: usize;
 
@@ -628,9 +628,9 @@ mod tests {
         let msg_hash = CtxSha256::new().update(msg.as_bytes()).r#final();
 
         let sig = privkey
-            .sign(CX_RND_RFC6979, CxMd::Sha256, &msg_hash)
+            .ecdsa_sign(CX_RND_RFC6979, CxMd::Sha256, &msg_hash)
             .unwrap();
 
-        assert_eq!(pubkey.verify(&msg_hash, &sig).is_ok(), true)
+        assert_eq!(pubkey.ecdsa_verify(&msg_hash, &sig).is_ok(), true)
     }
 }

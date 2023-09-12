@@ -88,7 +88,7 @@ extern "C" {
         hash_id: CxMd,
         msg: *const u8,
         msg_len: usize,
-        sig: *mut u8,
+        sig: *const u8,
         sig_len: usize) -> bool;
     pub fn ecall_get_random_bytes(buffer: *mut u8, size: usize);
     pub fn ecall_hash_update(
