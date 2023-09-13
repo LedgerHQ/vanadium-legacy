@@ -2,7 +2,8 @@ use alloc::vec::Vec;
 
 use crate::{
     ecall::{
-        ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32, ecall_ecdsa_sign, ecall_ecdsa_verify,
+        ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32,
+        ecall_ecdsa_sign, ecall_ecdsa_verify, ecall_schnorr_sign, ecall_schnorr_verify,
         ecall_get_master_fingerprint, ecall_get_random_bytes, ecall_hash_final,
         ecall_multm, ecall_powm, ecall_subm
     },
@@ -132,7 +133,11 @@ pub enum CxMd {
     Sha3_512 = 13,
 }
 
-pub const CX_RND_RFC6979: i32 = 3 << 9;
+pub const CX_RND_TRNG: u32 = 2 << 9;
+pub const CX_RND_RFC6979: u32 = 3 << 9;
+
+pub const CX_ECSCHNORR_BIP0340: u32 = 0 << 12;
+
 
 impl CtxSha256 {
     pub fn new() -> Self {
@@ -421,6 +426,22 @@ impl EcfpPublicKey {
         }
     }
 
+    pub fn schnorr_verify(&self, msg: &[u8], sig: &[u8]) -> Result<(), SdkError> {
+        if !unsafe { ecall_schnorr_verify(
+            self,
+            CX_ECSCHNORR_BIP0340 | CX_RND_TRNG,
+            CxMd::Sha256,
+            msg.as_ptr(),
+            msg.len(),
+            sig.as_ptr(),
+            sig.len(),
+        ) } {
+            Err(SdkError::SignatureVerification)
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn from_path(curve: CxCurve, path: &[u32]) -> Result<EcfpPublicKey, SdkError> {
         let mut privkey = EcfpPrivateKey::from_path(curve, path)?;
         let mut pubkey = EcfpPublicKey {
@@ -542,6 +563,34 @@ impl EcfpPrivateKey {
             Ok(sig[0..sig_len].to_vec())
         }
     }
+
+    // todo: the interface of this might be too bolos-specific
+    pub fn schnorr_sign(&self, msg: &[u8]) -> Result<Vec<u8>, SdkError> {
+        // BIP0340 signatures are always 64 bytes long
+        // no other types of Schnorr signatures are implemented at this time
+        let mut sig = [0u8; 64];
+        let mut sig_len: usize = sig.len();
+
+        unsafe {
+            if ecall_schnorr_sign(
+                self,
+                CX_ECSCHNORR_BIP0340 | CX_RND_TRNG,
+                CxMd::Sha256,
+                    msg.as_ptr(),
+                msg.len(),
+                sig.as_mut_ptr(),
+                &mut sig_len,
+            ) {
+                if sig_len != sig.len() {
+                    return Err(SdkError::GenericError); // This should never happen
+                }
+
+                Ok(sig[0..sig_len].to_vec())
+            } else {
+                Err(SdkError::Signature)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -628,9 +677,27 @@ mod tests {
         let msg_hash = CtxSha256::new().update(msg.as_bytes()).r#final();
 
         let sig = privkey
-            .ecdsa_sign(CX_RND_RFC6979, CxMd::Sha256, &msg_hash)
+            .ecdsa_sign(CX_RND_RFC6979 as i32, CxMd::Sha256, &msg_hash)
             .unwrap();
 
         assert_eq!(pubkey.ecdsa_verify(&msg_hash, &sig).is_ok(), true)
     }
+
+    #[test]
+    fn test_schnorr_sign_verify() {
+        let key_raw = [42u8; 32];
+        let mut privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &key_raw);
+        let mut pubkey = EcfpPublicKey::new(CxCurve::Secp256k1, &[0u8; 65]);
+        ecfp_generate_keypair(CxCurve::Secp256k1, &mut pubkey, &mut privkey, true).unwrap();
+
+        let msg = "If you don't believe me or don't get it, I don't have time to try to convince you, sorry.";
+        let msg_hash = CtxSha256::new().update(msg.as_bytes()).r#final();
+
+        let sig = privkey
+            .schnorr_sign(&msg_hash)
+            .unwrap();
+
+        assert_eq!(pubkey.schnorr_verify(&msg_hash, &sig).is_ok(), true)
+    }
+
 }
