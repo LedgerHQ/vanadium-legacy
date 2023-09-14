@@ -13,7 +13,7 @@ use vanadium_sdk::{
     ux::{app_loading_stop, ux_validate, UxAction, UxItem},
 };
 
-use bitcoin::{psbt::{PartiallySignedTransaction}, sighash::SighashCache, ScriptBuf, bip32::{Fingerprint, DerivationPath}, Transaction};
+use bitcoin::{psbt::Psbt, sighash::SighashCache, ScriptBuf, bip32::{Fingerprint, DerivationPath}, Transaction};
 
 #[cfg(not(test))]
 use alloc::string::String;
@@ -62,7 +62,7 @@ pub fn ui_authorize_wallet_policy_spend(wallet_policy: &WalletPolicy) -> bool {
 }
 
 
-fn sign_transaction_ecdsa<'a>(psbt: &PartiallySignedTransaction, input_index: usize, sighash_cache: &mut SighashCache<Transaction>, path: &[u32]) -> Result<PartialSignature<'a>> {
+fn sign_transaction_ecdsa<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut SighashCache<Transaction>, path: &[u32]) -> Result<PartialSignature<'a>> {
     let (sighash, sighash_type) = psbt
         .sighash_ecdsa(input_index, sighash_cache)
         .map_err(|_| AppError::new("Error computing sighash"))?;
@@ -80,7 +80,7 @@ fn sign_transaction_ecdsa<'a>(psbt: &PartiallySignedTransaction, input_index: us
     })
 }
 
-fn find_change_and_addr_index(psbt: &PartiallySignedTransaction, wallet_policy: &WalletPolicy, placeholder: &KeyPlaceholder, key_origin: &KeyOrigin, master_fpr: u32) -> Option<(bool, u32)> {
+fn find_change_and_addr_index(psbt: &Psbt, wallet_policy: &WalletPolicy, placeholder: &KeyPlaceholder, key_origin: &KeyOrigin, master_fpr: u32) -> Option<(bool, u32)> {
     for input in psbt.inputs.iter() {
         let keys_and_origins: Vec<&(Fingerprint, DerivationPath)> = if wallet_policy.get_segwit_version() == Ok(SegwitVersion::Taproot) {
             input.tap_key_origins.iter().map(|(_, (_, x))| x).collect()
@@ -155,7 +155,7 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
 
     // for each placeholder, for each input, sign if internal
     let mut partial_signatures: Vec<PartialSignature> = vec![];
-    let psbt = PartiallySignedTransaction::deserialize(&req.psbt)
+    let psbt = Psbt::deserialize(&req.psbt)
         .map_err(|_| AppError::new("Error deserializing psbt"))?;
 
     let mut sighash_cache = SighashCache::new(psbt.unsigned_tx.clone());
