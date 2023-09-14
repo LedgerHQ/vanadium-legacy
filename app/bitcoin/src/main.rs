@@ -23,6 +23,7 @@ mod crypto;
 mod error;
 mod handlers;
 mod message;
+mod taproot;
 mod ui;
 mod version;
 mod wallet;

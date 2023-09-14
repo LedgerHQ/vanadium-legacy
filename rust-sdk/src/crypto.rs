@@ -5,7 +5,7 @@ use crate::{
         ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32,
         ecall_ecdsa_sign, ecall_ecdsa_verify, ecall_schnorr_sign, ecall_schnorr_verify,
         ecall_get_master_fingerprint, ecall_get_random_bytes, ecall_hash_final,
-        ecall_multm, ecall_powm, ecall_subm
+        ecall_multm, ecall_powm, ecall_subm, ecall_addm, ecall_cx_ecfp_scalar_mult
     },
     ecall_hash_update, fatal, SdkError,
 };
@@ -20,19 +20,19 @@ const SECP256K1_GENERATOR: [u8; 65] = [
 ];
 
 // Modulo for secp256k1
-const SECP256K1_P: [u8; 32] = [
+pub const SECP256K1_P: [u8; 32] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0xff, 0xff, 0xfc, 0x2f
 ];
 
 // Curve order for secp256k1
-const SECP256K1_N: [u8; 32] = [
+pub const SECP256K1_N: [u8; 32] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
     0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41
 ];
 
 // (p + 1)/4, used to calculate square roots in secp256k1
-const SECP256K1_SQR_EXPONENT: [u8; 32] = [
+pub const SECP256K1_SQR_EXPONENT: [u8; 32] = [
     0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0xff, 0xff, 0x0c
 ];
@@ -505,6 +505,21 @@ impl EcfpPublicKey {
             _ => Err(SdkError::InvalidPublicKey),
         }
     }
+
+    pub fn has_odd_y(&self) -> bool {
+        return self.w[64] & 1 != 0
+    }
+}
+
+
+pub fn secp256k1_point(data: &[u8; 32]) -> Result<EcfpPublicKey, SdkError> {
+    let mut point = SECP256K1_GENERATOR;
+    unsafe {
+        if !ecall_cx_ecfp_scalar_mult(CxCurve::Secp256k1, point.as_mut_ptr(), data.as_ptr(), data.len()) {
+            return Err(SdkError::TweakError);
+        }
+    }
+    Ok(EcfpPublicKey::new(CxCurve::Secp256k1, &point))
 }
 
 impl EcfpPrivateKey {
@@ -520,6 +535,10 @@ impl EcfpPrivateKey {
         let mut privkey = Self::new(curve, &[0; 32]);
         derive_node_bip32(curve, path, Some(&mut privkey.d), None)?;
         Ok(privkey)
+    }
+
+    pub fn secp256k1_point(&self) -> Result<EcfpPublicKey, SdkError> {
+        secp256k1_point(&self.d)
     }
 
     pub fn pubkey(&self) -> Result<EcfpPublicKey, SdkError> {
@@ -591,7 +610,28 @@ impl EcfpPrivateKey {
             }
         }
     }
+
+    pub fn add_tweak(&mut self, t: &[u8; 32]) -> Result<(), SdkError> {
+        let pk = secp256k1_point(&self.d)?;
+        unsafe {
+            if pk.has_odd_y() {
+                // odd y, negate the secret key
+                if !ecall_subm(self.d.as_mut_ptr(), SECP256K1_N.as_ptr(), self.d.as_ptr(), SECP256K1_N.as_ptr(), self.d_len) {
+                    return Err(SdkError::TweakError);
+                }
+            }
+
+            // TODO: should fail if t >= SECP256K1_N
+
+            if !ecall_addm(self.d.as_mut_ptr(), self.d.as_ptr(), t.as_ptr(), SECP256K1_N.as_ptr(), 32) {
+                return Err(SdkError::TweakError);
+            }
+        }
+
+        Ok(())
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -699,5 +739,4 @@ mod tests {
 
         assert_eq!(pubkey.schnorr_verify(&msg_hash, &sig).is_ok(), true)
     }
-
 }
