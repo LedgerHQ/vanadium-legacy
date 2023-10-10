@@ -8,8 +8,20 @@ Compiling the C SDK is a pre-requisite for the [Rust sdk](../rust-sdk/), and for
 
 Build the docker image to have a ready-to-use RISC-V toolchain:
 
+* Linux x86_64 Host
+
 ```console
 docker build -t riscv .
+```
+
+* Apple M1/M2 Host: [dockross](https://github.com/dockcross/dockcross) `linux-riscv32` image shall be rebuilt
+
+```console
+// To build `dockcross/linux-riscv32` Docker image locally:
+git clone git@github.com:dockcross/dockcross.git
+cd dockcross
+make base
+make linux-riscv32
 ```
 
 Build the RISC-V C sdk using the `docker.sh` script:

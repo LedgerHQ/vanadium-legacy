@@ -43,11 +43,13 @@ case ${image} in
         ;;
 
     native)
+        [ ! -d "speculos" ] && git clone git@github.com:LedgerHQ/speculos.git
+        [ ! -d "ledger-secure-sdk" ] && git clone git@github.com:LedgerHQ/ledger-secure-sdk.git
         docker_run native \
                    --env SPECULOS_DIR=/speculos/ \
                    --env BOLOS_SDK_DIR=/bolos_sdk/ \
-                   -v "${SPECULOS_DIR}":/speculos/:ro \
-                   -v "${LEDGER_SDK_DIR}":/bolos_sdk/:ro
+                   -v $(pwd)/speculos:/speculos/:ro \
+                   -v $(pwd)/ledger-secure-sdk:/bolos_sdk/:ro
         ;;
 
     rust)

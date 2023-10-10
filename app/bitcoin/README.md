@@ -17,9 +17,28 @@ $ ./prepare-depencencies.sh
 
 Then, for native execution:
 
+* On Linux x86_64 host:
+
 ```console
 cargo build --release
 ```
+
+* On Apple Mac M1/M2 host
+
+Build Rust Docker image
+
+```console
+docker build -t rust -f rust.Dockerfile .
+```
+
+then
+
+```console
+docker run --rm -ti  -v $(pwd):/usr/src/vanadium -w /usr/src/vanadium rust:latest
+cd app/bitcoin
+cargo build --release --target aarch64-unknown-linux-gnu
+```
+
 
 or, for the RISC-V target:
 
@@ -52,6 +71,14 @@ The app requires patched versions of the [rust-bitcoin](https://github.com/rust-
 
 Make sure to not run tests in parallel, for example:
 
+* On Linux x86_64 host:
+
 ```
 cargo test -- --test-threads=1
+```
+
+* On Apple Mac M1/M2 host
+
+```
+cargo test --target aarch64-unknown-linux-gnu -- --test-threads=1
 ```
