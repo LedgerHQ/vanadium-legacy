@@ -14,20 +14,19 @@ RUN apt-get -yq update && \
 # Create SHA256SUMS, download dependencies and verify their integrity before
 # building OpenSSL.
 
-RUN cd /tmp/ 
-RUN echo 892a0875b9872acd04a9fde79b1f943075d5ea162415de3047c327df33fbaee5 openssl-1.1.1k.tar.gz >> SHA256SUMS
-RUN wget --quiet https://www.openssl.org/source/openssl-1.1.1k.tar.gz 
-RUN sha256sum --check SHA256SUMS 
-RUN rm SHA256SUMS 
-RUN tar xf openssl-1.1.1k.tar.gz
-RUN case $(uname -m) in \
+RUN cd /tmp/ && \
+  echo 892a0875b9872acd04a9fde79b1f943075d5ea162415de3047c327df33fbaee5 openssl-1.1.1k.tar.gz >> SHA256SUMS && \
+  wget --quiet https://www.openssl.org/source/openssl-1.1.1k.tar.gz && \
+  sha256sum --check SHA256SUMS && \
+  rm SHA256SUMS && \
+  tar xf openssl-1.1.1k.tar.gz && \
+  case $(uname -m) in \
         x86_64 | amd64) \
             arch=x86_64;; \
         aarch64 | arm64) \
             arch=aarch64;; \
         *) echo "Unkown architecture" && exit 1;; \
     esac && \
-    echo linux-${arch} > /test.dat && \ 
     cd openssl-1.1.1k && \ 
     ./Configure no-afalgeng no-aria no-asan no-asm no-async no-autoalginit no-autoerrinit no-autoload-config no-bf \
      no-buildtest-c++ no-camellia no-capieng no-cast no-chacha no-cmac no-cms no-comp no-crypto-mdebug no-crypto-mdebug-backtrace \
