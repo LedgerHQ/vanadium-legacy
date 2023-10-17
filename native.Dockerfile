@@ -16,8 +16,8 @@ RUN apt-get -yq update && \
 
 RUN cd /tmp/ && \
   echo 892a0875b9872acd04a9fde79b1f943075d5ea162415de3047c327df33fbaee5 openssl-1.1.1k.tar.gz >> SHA256SUMS && \
-  wget --quiet https://www.openssl.org/source/openssl-1.1.1k.tar.gz && \
-  sha256sum --check SHA256SUMS && \
+  wget https://www.openssl.org/source/openssl-1.1.1k.tar.gz && \
+  sha256sum --check SHA256SUMS && \
   rm SHA256SUMS && \
   tar xf openssl-1.1.1k.tar.gz && \
   case $(uname -m) in \
@@ -40,5 +40,3 @@ RUN cd /tmp/ && \
     make install_sw && \
     cd .. && \
     rm -r openssl-1.1.1k/ openssl-1.1.1k.tar.gz
-
-ENTRYPOINT /bin/bash

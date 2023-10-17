@@ -1,3 +1,4 @@
+#![feature(start)]
 #![cfg_attr(target_arch = "riscv32", no_std, no_main)]
 
 extern crate alloc;
@@ -128,13 +129,12 @@ pub fn atexit(_f: *const u8) {
 #[cfg(target_arch = "riscv32")]
 #[no_mangle]
 pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
-    main();
-    0
+    main(_argc, _argv)
 }
 
 
 #[start]
-pub extern "C" fn main() {
+pub fn main(_: isize, _: *const *const u8) -> isize {
     version::setup_app();
 
     loop {
