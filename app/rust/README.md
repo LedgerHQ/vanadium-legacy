@@ -14,7 +14,7 @@
    ./lib/create-lib.sh
    ```
    They are also generated as artifacts by the [GitHub CI](https://github.com/LedgerHQ/vanadium/actions/workflows/apps.yml).
-2. Build the Rust Docker image 
+3. Build the Rust Docker image 
    ```console
    docker build -t rust -f rust.Dockerfile .
    docker run --rm -ti  -v $(pwd):/usr/src/vanadium -w /usr/src/vanadium/app/rust rust:latest
