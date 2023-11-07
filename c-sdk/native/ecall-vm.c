@@ -9,7 +9,7 @@
 #include "ecall.h"
 #include "sdk.h"
 
-#include "../../../vm/src/ecall_hash.h"
+#include "from_vm/ecall_hash.h"
 
 bool ecall_derive_node_bip32(cx_curve_t curve,
                              const unsigned int *path,
