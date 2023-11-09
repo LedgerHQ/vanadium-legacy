@@ -2,6 +2,8 @@
 
 FROM dockcross/linux-riscv32:latest
 
+ENV DEFAULT_DOCKCROSS_IMAGE riscv
+
 RUN apt-get -yq update && \
     apt-get -yq install clang clang-format less python3-protobuf protobuf-compiler
 
@@ -17,5 +19,3 @@ RUN git clone --depth 1 git://cygwin.com/git/newlib-cygwin.git /tmp/newlib-cygwi
     make install && \
     cd / && \
     rm -rf /tmp/newlib-cygwin/
-
-ENTRYPOINT /bin/bash

@@ -8,6 +8,16 @@ rustflags = [
   "-lcrypto",
 ]
 
+[target.aarch64-unknown-linux-gnu]
+rustflags = [
+  "-L../../c-sdk/build/native",
+  "-L./lib/x64/",
+  "-lsdk",
+  "-lcxng",
+  "-lspeculos",
+  "-lcrypto",
+]
+
 [target.riscv32imc-unknown-none-elf]
 rustflags = [
   "-l", "sdk", "-L", "../../c-sdk/build",

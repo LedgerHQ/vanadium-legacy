@@ -5,7 +5,7 @@
 Build the docker image to have a ready-to-use RISC-V toolchain:
 
 ```console
-docker build -t riscv .
+docker build -t riscv -f riscv.Dockerfile .
 ```
 
 Build the RISC-V C sdk using the `docker.sh` script:

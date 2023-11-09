@@ -6,24 +6,6 @@ set -e
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-docker_run() {
-    image="${1}"
-
-    shift
-
-    docker run -u "$(id -u):$(id -g)" \
-       --env=SUDO_PS1=1 --env=SUDO_USER=1 --env=PS1='[\[\033[01;33m\]user@\h\[\033[00m\]:\[\033[01;33m\]\w\[\033[00m\]] \[\033[01;91m\]\$\[\033[01;35m\]\[\033[00m\] ' \
-       -w /c-sdk \
-       -v "${SCRIPT_DIR}/c-sdk/":/c-sdk/ \
-       -v "${SCRIPT_DIR}/host/":/host/:ro \
-       -v "${SCRIPT_DIR}/tools/":/tools/:ro \
-       -v "${SCRIPT_DIR}/vm/":/vm/:ro \
-       "$@" \
-       --rm -it "${image}" \
-       bash
-
-}
-
 if [ $# -eq 0 ]; then
     image='riscv'
 elif [ $# -eq 1 ]; then
@@ -35,23 +17,17 @@ fi
 
 case ${image} in
     riscv)
-        if [ ! -f "${SCRIPT_DIR}/c-sdk/dockcross-linux-riscv32-latest" ]; then
-            docker run --rm dockcross/linux-riscv32:latest > "${SCRIPT_DIR}/c-sdk/dockcross-linux-riscv32-latest"
-            chmod 0755 "${SCRIPT_DIR}/c-sdk/dockcross-linux-riscv32-latest"
-        fi
-        docker_run riscv
+        docker run -w /c-sdk -v "${SCRIPT_DIR}/c-sdk/":/c-sdk/ --rm -it riscv bash -c "cmake -Bbuild/riscv/ -H. && make -C build/riscv/ clean && make -C build/riscv/"
         ;;
 
     native)
-        docker_run native \
-                   --env SPECULOS_DIR=/speculos/ \
-                   --env BOLOS_SDK_DIR=/bolos_sdk/ \
-                   -v "${SPECULOS_DIR}":/speculos/:ro \
-                   -v "${LEDGER_SDK_DIR}":/bolos_sdk/:ro
-        ;;
-
-    rust)
-        docker_run rust
+        [ ! -d "ledger-secure-sdk" ] && git clone git@github.com:LedgerHQ/ledger-secure-sdk.git
+        docker run -w /c-sdk \
+            -v "${SCRIPT_DIR}/c-sdk/":/c-sdk/ \
+            --env BOLOS_SDK_DIR=/bolos_sdk/ \
+            -v $(pwd)/ledger-secure-sdk:/bolos_sdk/:ro \
+            --rm -it native \
+            bash -c "cmake -Bbuild/native/ -H. -DNATIVE=1 && make -C build/native/ clean && make -C build/native/"
         ;;
 
     *)

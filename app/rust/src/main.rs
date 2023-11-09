@@ -1,3 +1,4 @@
+#![feature(start)]
 #![cfg_attr(target_arch = "riscv32", no_std, no_main)]
 
 extern crate alloc;
@@ -23,6 +24,7 @@ mod partner;
 mod swap;
 mod ui;
 mod version;
+mod comm;
 
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
@@ -128,25 +130,25 @@ pub fn atexit(_f: *const u8) {
 #[cfg(target_arch = "riscv32")]
 #[no_mangle]
 pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
-    main();
-    0
+    main(_argc, _argv)
 }
 
 
 #[start]
-pub extern "C" fn main() {
+pub fn main(_: isize, _: *const *const u8) -> isize {
     version::setup_app();
 
+    vanadium_sdk::ux::ux_idle();
     loop {
-        vanadium_sdk::ux::ux_idle();
-
-        let buffer = vanadium_sdk::xrecv(512);
+        let buffer = comm::receive_message().unwrap(); // TODO: what to do on error?
 
         vanadium_sdk::ux::app_loading_start("Handling request...\x00");
 
         let result = handle_req(&buffer);
-        vanadium_sdk::xsend(&result);
 
         vanadium_sdk::ux::app_loading_stop();
+        vanadium_sdk::ux::ux_idle();
+
+        comm::send_message(&result).unwrap(); // TODO: what to do on error?
     }
 }

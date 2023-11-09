@@ -61,16 +61,16 @@ include_directories(BEFORE ./)
 
 if (NOT NATIVE)
   add_library(sdk
-    crypto.c
-    risc-v/div.S
+    #crypto.c
+    #sdk.c
+    #uint256.c
+    #risc-v/div.S
     risc-v/ecall-riscv.c
-    risc-v/math.c
-    risc-v/start.S
-    risc-v/std.c
-    sdk.c
-    uint256.c)
+    #risc-v/math.c
+    #risc-v/start.S
+    risc-v/std.c)
 
-  add_subdirectory(ux)
+  #add_subdirectory(ux)
 
 else()
 
@@ -82,7 +82,7 @@ else()
 
   set(BOLOS_SDK_DIR "$ENV{BOLOS_SDK_DIR}" CACHE INTERNAL "Copied from environment variable")
 
-  add_compile_definitions(HAVE_NES_CRYPT HAVE_ST_EDES_PLUS HAVE_ST_AES HAVE_CRC HAVE_HASH HAVE_RIPEMD160 HAVE_SHA224 HAVE_SHA256 HAVE_SHA3 HAVE_SHA384 HAVE_SHA512 HAVE_BLAKE2 HAVE_GROESTL HAVE_HMAC HAVE_PBKDF2 HAVE_DES HAVE_AES HAVE_MATH HAVE_RNG HAVE_RNG_RFC6979 HAVE_RNG_SP800_90A HAVE_ECC HAVE_ECC_WEIERSTRASS HAVE_ECC_TWISTED_EDWARDS HAVE_ECC_MONTGOMERY HAVE_SECP256K1_CURVE HAVE_SECP256R1_CURVE HAVE_SECP384R1_CURVE HAVE_SECP521R1_CURVE HAVE_FR256V1_CURVE HAVE_STARK256_CURVE HAVE_BRAINPOOL_P256R1_CURVE HAVE_BRAINPOOL_P256T1_CURVE HAVE_BRAINPOOL_P320R1_CURVE HAVE_BRAINPOOL_P320T1_CURVE HAVE_BRAINPOOL_P384R1_CURVE HAVE_BRAINPOOL_P384T1_CURVE HAVE_BRAINPOOL_P512R1_CURVE HAVE_BRAINPOOL_P512T1_CURVE HAVE_BLS12_381_G1_CURVE HAVE_CV25519_CURVE HAVE_CV448_CURVE HAVE_ED25519_CURVE HAVE_ED448_CURVE HAVE_ECDH HAVE_ECDSA HAVE_EDDSA HAVE_ECSCHNORR HAVE_X25519 HAVE_X448)
+  add_compile_definitions(HAVE_NES_CRYPT HAVE_ST_AES HAVE_CRC HAVE_HASH HAVE_RIPEMD160 HAVE_SHA224 HAVE_SHA256 HAVE_SHA3 HAVE_SHA384 HAVE_SHA512 HAVE_BLAKE2 HAVE_GROESTL HAVE_HMAC HAVE_PBKDF2 HAVE_AES HAVE_MATH HAVE_RNG HAVE_RNG_RFC6979 HAVE_RNG_SP800_90A HAVE_ECC HAVE_ECC_WEIERSTRASS HAVE_ECC_TWISTED_EDWARDS HAVE_ECC_MONTGOMERY HAVE_SECP256K1_CURVE HAVE_SECP256R1_CURVE HAVE_SECP384R1_CURVE HAVE_SECP521R1_CURVE HAVE_FR256V1_CURVE HAVE_STARK256_CURVE HAVE_BRAINPOOL_P256R1_CURVE HAVE_BRAINPOOL_P256T1_CURVE HAVE_BRAINPOOL_P320R1_CURVE HAVE_BRAINPOOL_P320T1_CURVE HAVE_BRAINPOOL_P384R1_CURVE HAVE_BRAINPOOL_P384T1_CURVE HAVE_BRAINPOOL_P512R1_CURVE HAVE_BRAINPOOL_P512T1_CURVE HAVE_BLS12_381_G1_CURVE HAVE_CV25519_CURVE HAVE_CV448_CURVE HAVE_ED25519_CURVE HAVE_ED448_CURVE HAVE_ECDH HAVE_ECDSA HAVE_EDDSA HAVE_ECSCHNORR HAVE_X25519 HAVE_X448)
 
   add_library(cxng
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_aead.c
@@ -98,7 +98,6 @@ else()
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hkdf.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_rsa.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_aes_siv.c
-    ${BOLOS_SDK_DIR}/lib_cxng/src/cx_des.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_hmac.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_selftests.c
     ${BOLOS_SDK_DIR}/lib_cxng/src/cx_blake2b.c
@@ -173,19 +172,18 @@ else()
   target_include_directories (speculos PUBLIC native/speculos/ native/speculos/bolos/)
 
   add_library(sdk
-    crypto.c
+    #crypto.c
+    #sdk.c
+    #uint256.c
     native/ecall-native.c
     native/ecall-vm.c
-    sdk.c
-    uint256.c
-    ../../vm/src/base58.c
-    ../../vm/src/ecall_bolos.c
-    ../../vm/src/ecall_hash.c
-    ../../vm/src/segwit_addr.c
-    ../../vm/src/uint256.c
-    )
+    native/from_vm/base58.c
+    native/from_vm/ecall_bolos.c
+    native/from_vm/ecall_hash.c
+    native/from_vm/segwit_addr.c
+    native/from_vm/uint256.c)
 
-  add_subdirectory(ux)
+  #add_subdirectory(ux)
 
   target_include_directories (sdk PUBLIC native/ ${BOLOS_SDK_DIR}/include ${BOLOS_SDK_DIR}/lib_cxng/include ${BOLOS_SDK_DIR}/target/nanox/include/)
 endif()

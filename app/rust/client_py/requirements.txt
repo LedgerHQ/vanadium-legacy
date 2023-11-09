@@ -1,0 +1,7 @@
+construct
+bip32
+ledgerwallet
+pycryptodomex
+prompt-toolkit
+protobuf
+pyelftools

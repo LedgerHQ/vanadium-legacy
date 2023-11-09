@@ -1,39 +1,35 @@
-This is Vanadium's C SDK. It can be compiled for both the RISC-V and the native targets, and contains the interface to the ecalls that are exported by the VM (in particular, the ones allowing access to Bolos syscalls).
+This is Vanadium's C SDK. It can be compiled for both RISC-V and Linux native targets, and contains the interface to the ecalls that are exported by the VM (in particular, the ones allowing access to Bolos syscalls).
 
-When compiled towards the RISC-V target, direct ecalls are used. With native compilation, the corresponding implementation from speculos are used instead.
+- When compiled towards RISC-V target, direct ecalls are used. 
+- When compiled towards Native target, the corresponding implementation from OpenSSL are used instead.
 
-Compiling the C SDK is a pre-requisite for the [Rust sdk](../rust-sdk/), and for any app using the Rust sdk.
+Compiling the C SDK is a pre-requisite for the [Rust sdk](../rust-sdk/), and for any app using Rust :crab: SDK.
 
 ## Build for RISC-V target
-
-Build the docker image to have a ready-to-use RISC-V toolchain:
-
+### Build the Docker image to have a ready-to-use RISC-V toolchain
+#### Linux x86_64 host
 ```console
-docker build -t riscv .
+docker build -t riscv -f riscv.Dockerfile .
 ```
-
-Build the RISC-V C sdk using the `docker.sh` script:
-
+#### Apple M1/M2 host
+[Dockcross](https://github.com/dockcross/dockcross) `linux-riscv32` image shall be rebuilt locally
+```console
+git clone git@github.com:dockcross/dockcross.git
+cd dockcross
+make base
+make linux-riscv32
+docker build -t riscv -f riscv.Dockerfile .
+```
+### Build C-sdk
 ```console
 $ ./docker.sh riscv
-[root:/c-sdk] # cmake -Bbuild -H.
-[root:/c-sdk] # make -C build/
 ```
-
-## Build for native target
-
-Build the docker image:
-
+## Build for Native target
+### Build the Docker image
 ```console
 docker build -t native -f native.Dockerfile .
 ```
-
-Build the native C sdk using the `docker.sh` script:
-
-From the docker image `./docker.sh native`, configure CMake to build the native binaries into `build/native/`:
-
+### Build C-sdk
 ```console
 $ ./docker.sh native
-[root:/c-sdk] # cmake -Bbuild/native/ -H. -DNATIVE=1
-[root:/c-sdk] # make -C build/native/
 ```

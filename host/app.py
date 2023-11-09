@@ -3,7 +3,8 @@ import logging
 import sys
 
 from construct import Bytes, Int8ul, Struct
-from Crypto.Cipher import AES
+#from Crypto.Cipher import AES
+from Cryptodome.Cipher import AES
 from typing import cast, List, Optional, Type
 from zipfile import ZipFile
 

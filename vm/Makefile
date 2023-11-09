@@ -105,7 +105,7 @@ endif
 CC      := $(CLANGPATH)clang
 CFLAGS  += -O3 -Os
 
-CFLAGS  += -I../c-sdk/ # for sdk/ecall.h
+CFLAGS  += -I../c-sdk/ # for api/ecall-params.h
 
 AS      := $(GCCPATH)arm-none-eabi-gcc
 LD      := $(GCCPATH)arm-none-eabi-gcc
