@@ -70,7 +70,7 @@ if (NOT NATIVE)
     #risc-v/start.S
     risc-v/std.c)
 
-  add_subdirectory(ux)
+  #add_subdirectory(ux)
 
 else()
 
@@ -172,9 +172,9 @@ else()
   target_include_directories (speculos PUBLIC native/speculos/ native/speculos/bolos/)
 
   add_library(sdk
-    crypto.c
-    sdk.c
-    uint256.c
+    #crypto.c
+    #sdk.c
+    #uint256.c
     native/ecall-native.c
     native/ecall-vm.c
     native/from_vm/base58.c
@@ -183,7 +183,7 @@ else()
     native/from_vm/segwit_addr.c
     native/from_vm/uint256.c)
 
-  add_subdirectory(ux)
+  #add_subdirectory(ux)
 
   target_include_directories (sdk PUBLIC native/ ${BOLOS_SDK_DIR}/include ${BOLOS_SDK_DIR}/lib_cxng/include ${BOLOS_SDK_DIR}/target/nanox/include/)
 endif()
