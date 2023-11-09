@@ -329,9 +329,9 @@ bool sys_get_random_bytes(guest_pointer_t p_buffer, size_t size)
  */
 bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
 {
-    uint8_t r[64], a[32], b[32];
+    uint8_t r[32], a[32], b[32];
 
-    if (len > sizeof(a)) {
+    if (len > sizeof(r)) {
         err("invalid size for addm");
         eret->success = false;
         return true;
@@ -362,7 +362,7 @@ bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
         return true;
     }
 
-    if (!copy_host_buffer(p_r, r, len * 2)) {
+    if (!copy_host_buffer(p_r, r, len)) {
         return false;
     }
 
@@ -376,9 +376,9 @@ bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
  */
 bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
 {
-    uint8_t r[64], a[32], b[32];
+    uint8_t r[32], a[32], b[32];
 
-    if (len > sizeof(a)) {
+    if (len > sizeof(r)) {
         err("invalid size for subm");
         eret->success = false;
         return true;
@@ -409,7 +409,7 @@ bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
         return true;
     }
 
-    if (!copy_host_buffer(p_r, r, len * 2)) {
+    if (!copy_host_buffer(p_r, r, len)) {
         return false;
     }
 
@@ -419,14 +419,21 @@ bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
 }
 
 /**
- * If m is NULL, mult().
+ * m can't be NULL
  */
 bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
 {
-    uint8_t r[64], a[32], b[32];
+    uint8_t r[32], a[32], b[32];
 
-    if (len > sizeof(a)) {
+    if (len > sizeof(r)) {
         err("invalid size for multm");
+        eret->success = false;
+        return true;
+    }
+
+    if (p_m.addr == 0) {
+        // unlike add/addm and sub/subm, the length of the result is 2*len in the non-modular version.
+        // therefore, we cannot support it cleanly in the same ecall
         eret->success = false;
         return true;
     }
@@ -439,24 +446,19 @@ bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poi
         return false;
     }
 
-    cx_err_t err;
-    if (p_m.addr == 0) {
-        err = cx_math_mult_no_throw(r, a, b, len);
-    } else {
-        uint8_t m[32];
-        if (!copy_guest_buffer(p_m, m, len)) {
-            return false;
-        }
-
-        err = cx_math_multm_no_throw(r, a, b, m, len);
+    uint8_t m[32];
+    if (!copy_guest_buffer(p_m, m, len)) {
+        return false;
     }
+
+    cx_err_t err = cx_math_multm_no_throw(r, a, b, m, len);
 
     if (err != CX_OK) {
         eret->success = false;
         return true;
     }
 
-    if (!copy_host_buffer(p_r, r, len * 2)) {
+    if (!copy_host_buffer(p_r, r, len)) {
         return false;
     }
 
