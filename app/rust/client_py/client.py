@@ -15,7 +15,7 @@ from prompt_toolkit.history import FileHistory
 from argparse import ArgumentParser
 from typing import Optional
 
-from message_pb2 import RequestGetVersion, Request, Response
+from boiler_pb2 import RequestGetVersion, RequestGetAppName, Request, Response
 from util import bip32_path_to_list
 
 # TODO: make a proper package for the stream.py module
@@ -86,11 +86,24 @@ class Client:
         assert response.WhichOneof("response") == "get_version"
         print(f"version: {response.get_version.version}")
         return
+    
+    def get_appname_prepare_request(self, args: dotdict):
+        get_appname = RequestGetAppName()
+        message = Request()
+        message.get_appname.CopyFrom(get_appname)
+        assert message.WhichOneof("request") == "get_appname"
+        return message.SerializeToString()
+
+    def get_appname_parse_response(self, response):
+        assert response.WhichOneof("response") == "get_appname"
+        print(f"appname: {response.get_appname.appname}")
+        return
+    
 
 class ActionArgumentCompleter(Completer):
     ACTION_ARGUMENTS = {
         "get_version": [],
-        "get_app_name": [],
+        "get_appname": [],
         "get_pubkey": [ "display", "path="],
         "sign_tx": ["hash="],
     }
@@ -116,7 +129,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    actions = ["get_version", "get_app_name", "get_pubkey", "sign_tx"]
+    actions = ["get_version", "get_appname", "get_pubkey", "sign_tx"]
 
     completer = ActionArgumentCompleter()
     # Create a history object

@@ -33,9 +33,9 @@ use alloc::vec::Vec;
 use quick_protobuf::{BytesReader, BytesWriter, MessageRead, MessageWrite, Writer};
 
 use error::*;
-use message::message::mod_Request::OneOfrequest;
-use message::message::mod_Response::OneOfresponse;
-use message::message::*;
+use message::boiler::mod_Request::OneOfrequest;
+use message::boiler::mod_Response::OneOfresponse;
+use message::boiler::*;
 use swap::*;
 
 use vanadium_sdk::fatal;
@@ -43,9 +43,17 @@ use vanadium_sdk::fatal;
 #[cfg(test)]
 use hex_literal::hex;
 
+use version::{APP_VERSION, APP_NAME};
+
 fn handle_get_version<'a>() -> ResponseGetVersion<'a> {
     ResponseGetVersion {
-        version: Cow::Borrowed("1.2.3"),
+        version: Cow::Borrowed(core::str::from_utf8(APP_VERSION.as_slice()).unwrap()),
+    }
+}
+
+fn handle_get_appname<'a>() -> ResponseGetAppName<'a> {
+    ResponseGetAppName {
+        appname: Cow::Borrowed(core::str::from_utf8(APP_NAME.as_slice()).unwrap()),
     }
 }
 
@@ -71,6 +79,7 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
     let response = Response {
         response: match request.request {
             OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()),
+            OneOfrequest::get_appname(_) => OneOfresponse::get_appname(handle_get_appname()),
             OneOfrequest::init_swap(init_swap) => {
                 OneOfresponse::init_swap(handle_init_swap(&init_swap))
             }

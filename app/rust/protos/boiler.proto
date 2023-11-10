@@ -13,6 +13,13 @@ message ResponseGetVersion {
   string version = 1;
 };
 
+message RequestGetAppName {
+};
+
+message ResponseGetAppName {
+  string appname = 1;
+};
+
 message RequestInitSwap {
 };
 
@@ -70,20 +77,22 @@ message ResponseError {
 message Request {
   oneof request {
     RequestGetVersion get_version = 1;
-    RequestInitSwap init_swap = 2;
-    RequestInitSell init_sell = 3;
-    RequestSwap swap = 4;
-    RequestSell sell = 5;
+    RequestGetAppName get_appname = 2;
+    RequestInitSwap init_swap = 3;
+    RequestInitSell init_sell = 4;
+    RequestSwap swap = 5;
+    RequestSell sell = 6;
   }
 }
 
 message Response {
   oneof response {
     ResponseGetVersion get_version = 1;
-    ResponseInitSwap init_swap = 2;
-    ResponseInitSell init_sell = 3;
-    ResponseSwap swap = 4;
-    ResponseSell sell = 5;
-    ResponseError error = 6;
+    ResponseGetAppName get_appname = 2;
+    ResponseInitSwap init_swap = 3;
+    ResponseInitSell init_sell = 4;
+    ResponseSwap swap = 5;
+    ResponseSell sell = 6;
+    ResponseError error = 7;
   }
 }
