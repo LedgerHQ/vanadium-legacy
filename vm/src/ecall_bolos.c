@@ -543,7 +543,6 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
     cx_ecfp_private_key_t private_key = {0};
     cx_ecfp_public_key_t public_key;
 
-    int ret = 0;
 
     // derive the seed with bip32_path
 #pragma GCC diagnostic push
@@ -556,23 +555,20 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
 #pragma GCC diagnostic pop
 
     // new private_key from raw
-    ret = cx_ecfp_init_private_key_no_throw(CX_CURVE_256K1,
+    int ret1 = cx_ecfp_init_private_key_no_throw(CX_CURVE_256K1,
                                             raw_private_key,
                                             sizeof(raw_private_key),
                                             &private_key);
-    if (ret < 0) {
-        eret->success = false;
-        return true;
-    }
 
     // generate corresponding public key
-    cx_ecfp_generate_pair_no_throw(CX_CURVE_256K1, &public_key, &private_key, 1);
+    int ret2 = cx_ecfp_generate_pair_no_throw(CX_CURVE_256K1, &public_key, &private_key, 1);
 
+    // make sure to delete private key material
     explicit_bzero(raw_private_key, sizeof(raw_private_key));
     explicit_bzero(chain_code, sizeof(chain_code));
     explicit_bzero(&private_key, sizeof(private_key));
 
-    if (ret < 0) {
+    if (ret1 != CX_OK || ret2 != CX_OK) {
         eret->success = false;
         return true;
     }
