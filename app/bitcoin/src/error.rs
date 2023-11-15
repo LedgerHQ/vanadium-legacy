@@ -16,6 +16,12 @@ impl AppError {
     }
 }
 
+impl From<&str> for AppError {
+    fn from(err: &str) -> Self {
+        AppError::new(&err.to_string())
+    }
+}
+
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.details)

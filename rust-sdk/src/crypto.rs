@@ -5,7 +5,7 @@ use crate::{
         ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32,
         ecall_ecdsa_sign, ecall_ecdsa_verify, ecall_schnorr_sign, ecall_schnorr_verify,
         ecall_get_master_fingerprint, ecall_get_random_bytes, ecall_hash_final,
-        ecall_multm, ecall_powm, ecall_subm, ecall_addm, ecall_cx_ecfp_scalar_mult
+        ecall_multm, ecall_powm, ecall_subm, ecall_addm, ecall_cx_ecfp_scalar_mult, ecall_cx_ecfp_add_point
     },
     ecall_hash_update, fatal, SdkError,
 };
@@ -475,7 +475,7 @@ impl EcfpPublicKey {
                 let prefix = data[0];
                 let x: [u8; 32] = data[1..33].try_into().expect("Cannot fail");
 
-                let mut y = x.clone();
+                let mut y: [u8; 32] = x.clone();
 
                 unsafe {
                     // TODO: handle errors
@@ -508,6 +508,17 @@ impl EcfpPublicKey {
 
     pub fn has_odd_y(&self) -> bool {
         return self.w[64] & 1 != 0
+    }
+
+    pub fn add_exp_tweak(&mut self, t: &[u8; 32]) -> Result<(), SdkError> {
+        let exp_tweak = secp256k1_point(&t)?;
+        unsafe {
+            if !ecall_cx_ecfp_add_point(CxCurve::Secp256k1, self.w.as_mut_ptr(), self.w.as_ptr(), exp_tweak.w.as_ptr()) {
+                return Err(SdkError::TweakError);
+            }
+        }
+
+        Ok(())
     }
 }
 

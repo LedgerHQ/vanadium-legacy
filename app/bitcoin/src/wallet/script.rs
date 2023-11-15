@@ -12,10 +12,13 @@ use vanadium_sdk::crypto::EcfpPublicKey;
 
 use crate::crypto::{hash160, sha256};
 
+use crate::taproot::TapTreeHash;
 use crate::wallet::bip32::ExtendedPubKey;
 
-
-use super::wallet::{DescriptorTemplate, KeyInformation, KeyPlaceholder, WalletPolicy};
+use crate::{
+    taproot::TapTweak,
+    wallet::{DescriptorTemplate, KeyInformation, KeyPlaceholder, WalletPolicy}
+};
 
 const MAX_PUBKEYS_PER_MULTISIG: usize = 20;
 const MAX_PUBKEYS_PER_MULTI_A: usize = 999;
@@ -30,12 +33,14 @@ pub trait ToScriptWithKeyInfo {
         key_information: &[KeyInformation],
         is_change: bool,
         address_index: u32,
+        ctx: ScriptContext,
     ) -> Result<ScriptBuf, &'static str>;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum ScriptContext {
+pub enum ScriptContext {
     None,
+    Sh,
     Wsh,
     Tr,
 }
@@ -101,13 +106,17 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
 
         builder = match self {
             DescriptorTemplate::Sh(inner) => {
+                if ctx != ScriptContext::None && ctx != ScriptContext::Wsh {
+                    return Err("sh can only be used top-level or inside wsh")
+                } 
+
                 let mut inner_builder = Builder::new();
                 inner_builder = inner.to_script_inner(
                     key_information,
                     is_change,
                     address_index,
                     inner_builder,
-                    ctx,
+                    ScriptContext::Sh,
                 )?;
                 let script_hash = ScriptHash::from_byte_array(hash160(&inner_builder.as_bytes()));
 
@@ -117,19 +126,29 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                     .push_opcode(OP_EQUAL)
             }
             DescriptorTemplate::Wsh(inner) => {
+                if ctx != ScriptContext::None {
+                    return Err("wsh can only be used top-level")
+                } 
+
                 let mut inner_builder = Builder::new();
                 inner_builder = inner.to_script_inner(
                     key_information,
                     is_change,
                     address_index,
                     inner_builder,
-                    ctx,
+                    ScriptContext::Wsh,
                 )?;
                 let script_hash = WScriptHash::from_byte_array(sha256(&inner_builder.as_bytes()));
                 builder.push_int(0).push_slice(script_hash)
             }
             DescriptorTemplate::Pkh(kp) => {
-                let pubkey = derive(kp)?.public_key.to_compressed();
+                let key = derive(kp)?;
+                let pubkey: Vec<u8> = if ctx == ScriptContext::Tr {
+                    key.public_key.as_bytes_xonly().into()
+                } else {
+                    key.public_key.to_compressed().into()
+                };
+
                 let pubkey_hash = PubkeyHash::from_byte_array(hash160(&pubkey));
 
                 builder
@@ -140,6 +159,10 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                     .push_opcode(OP_CHECKSIG)
             }
             DescriptorTemplate::Wpkh(kp) => {
+                if ctx != ScriptContext::None && ctx != ScriptContext::Sh {
+                    return Err("wpkh can only be used top-level or inside sh")
+                } 
+
                 let pubkey = derive(kp)?.public_key.to_compressed();
                 let pubkey_hash = WPubkeyHash::from_byte_array(hash160(&pubkey));
 
@@ -215,7 +238,18 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
 
                 builder.push_int(*k as i64).push_opcode(OP_NUMEQUAL)
             }
-            DescriptorTemplate::Tr(_, _) => todo!(), // TODO: handle tr
+            DescriptorTemplate::Tr(k, tree) => {
+                let mut taproot_key = derive(k)?.public_key;
+                if let Some(t) = tree {
+                    let tree_hash = tree.as_ref().unwrap().get_taptree_hash(key_information, is_change, address_index)
+                        .map_err(|_| "Failed to compute taptree hash")?;
+                    taproot_key.taptweak(&tree_hash).map_err(|_| "Failed to compute key tweak")?;
+                } else {
+                    // per BIP-86/BIP-386
+                    taproot_key.taptweak(&[]).map_err(|_| "Failed to compute key tweak")?;
+                }
+                builder.push_int(1).push_slice(taproot_key.as_bytes_xonly())
+            },
             DescriptorTemplate::Zero => builder.push_opcode(OP_0),
             DescriptorTemplate::One => builder.push_opcode(OP_PUSHNUM_1),
             DescriptorTemplate::Pk(k) => {
@@ -393,6 +427,7 @@ impl ToScriptWithKeyInfo for DescriptorTemplate {
         key_information: &[KeyInformation],
         is_change: bool,
         address_index: u32,
+        ctx: ScriptContext,
     ) -> Result<ScriptBuf, &'static str> {
         let builder = Builder::new();
         Ok(self
@@ -401,7 +436,7 @@ impl ToScriptWithKeyInfo for DescriptorTemplate {
                 is_change,
                 address_index,
                 builder,
-                ScriptContext::None,
+                ctx,
             )?
             .as_script()
             .into())
@@ -411,7 +446,7 @@ impl ToScriptWithKeyInfo for DescriptorTemplate {
 impl ToScript for WalletPolicy {
     fn to_script(&self, is_change: bool, address_index: u32) -> Result<ScriptBuf, &'static str> {
         self.descriptor_template
-            .to_script(&self.key_information, is_change, address_index)
+            .to_script(&self.key_information, is_change, address_index, ScriptContext::None)
     }
 }
 

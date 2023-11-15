@@ -1,11 +1,11 @@
-use vanadium_sdk::crypto::{EcfpPrivateKey, CtxSha256};
+use bitcoin::{VarInt, consensus::encode};
+use vanadium_sdk::crypto::{EcfpPrivateKey, CtxSha256, EcfpPublicKey, secp256k1_point};
 
-use crate::error::AppError;
+use crate::{error::AppError, wallet::{TapTree, script::{ToScriptWithKeyInfo, ScriptContext}, KeyInformation}};
 
-pub const BIP0341_TAPTWEAK_TAG: [u8; 8] = [b'T', b'a', b'p', b'T', b'w', b'e', b'a', b'k'];
-pub const BIP0341_TAPBRANCH_TAG: [u8; 9] = [b'T', b'a', b'p', b'B', b'r', b'a', b'n', b'c', b'h'];
-pub const BIP0341_TAPLEAF_TAG: [u8; 7] = [b'T', b'a', b'p', b'L', b'e', b'a', b'f'];
-
+pub const BIP0341_TAPTWEAK_TAG: &[u8; 8] = b"TapTweak";
+pub const BIP0341_TAPBRANCH_TAG: &[u8; 9] = b"TapBranch";
+pub const BIP0341_TAPLEAF_TAG: &[u8; 7] = b"TapLeaf";
 
 fn new_tagged_hash(tag: &[u8]) -> CtxSha256 {    
     let hashtag = CtxSha256::new().update(tag).r#final();
@@ -42,12 +42,53 @@ impl TapTweak for EcfpPrivateKey {
     fn taptweak(&mut self, h: &[u8]) -> Result<(), AppError> {
         let pk = self.secp256k1_point()?;
 
-        let t = tagged_hash(&BIP0341_TAPTWEAK_TAG, &pk.as_bytes_xonly(), Some(h));
+        let t = tagged_hash(BIP0341_TAPTWEAK_TAG, &pk.as_bytes_xonly(), Some(h));
         self.add_tweak(&t)?;
 
         Ok(())
     }
 }
+
+impl TapTweak for EcfpPublicKey {
+    fn taptweak(&mut self, h: &[u8]) -> Result<(), AppError> {
+        // TODO: should this fail if it has odd y? Or coerce to even y automatically?
+
+        let t = tagged_hash(BIP0341_TAPTWEAK_TAG, &self.as_bytes_xonly(), Some(h));
+
+        self.add_exp_tweak(&t)?;
+
+        Ok(())
+    }
+}
+
+pub trait TapTreeHash {
+    fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError>;
+}
+
+impl TapTreeHash for TapTree {
+    fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError> {
+        match self {
+            TapTree::Script(leaf_desc) => {
+                let mut ctx = new_tagged_hash(BIP0341_TAPLEAF_TAG);
+                ctx.update(&[0xC0u8]); // leaf version
+                let leaf_script = leaf_desc.to_script(key_information, is_change, address_index, ScriptContext::Tr)?;
+                ctx.update(&encode::serialize(&VarInt(leaf_script.len() as u64)));
+                ctx.update(&leaf_script.to_bytes());
+                Ok(ctx.r#final())
+            },
+            TapTree::Branch(l, r) => {
+                let hash_left = l.get_taptree_hash(key_information, is_change, address_index)?;
+                let hash_right = r.get_taptree_hash(key_information, is_change, address_index)?;
+                if hash_left <= hash_right {
+                    Ok(tagged_hash(BIP0341_TAPBRANCH_TAG, &hash_left, Some(&hash_right)))
+                } else {
+                    Ok(tagged_hash(BIP0341_TAPBRANCH_TAG, &hash_right, Some(&hash_left)))
+                }
+            },
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

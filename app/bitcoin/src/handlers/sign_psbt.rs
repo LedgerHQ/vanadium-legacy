@@ -1,10 +1,10 @@
 use alloc::{borrow::Cow, format, vec, vec::Vec};
 use subtle::ConstantTimeEq;
-use vanadium_sdk::crypto::{CxCurve, CxMd, EcfpPrivateKey, CX_RND_RFC6979};
+use vanadium_sdk::crypto::{CxCurve, CxMd, EcfpPrivateKey, CX_RND_RFC6979, EcfpPublicKey};
 
 use crate::{
     message::message::{PartialSignature, RequestSignPsbt, ResponseSignPsbt},
-    wallet::{WalletPolicy, SegwitVersion, KeyOrigin, KeyPlaceholder, DescriptorTemplate}, taproot::TapTweak,
+    wallet::{WalletPolicy, SegwitVersion, KeyOrigin, KeyPlaceholder, DescriptorTemplate}, taproot::{TapTweak, TapTreeHash},
 };
 
 #[cfg(not(test))]
@@ -13,7 +13,7 @@ use vanadium_sdk::{
     ux::{app_loading_stop, ux_validate, UxAction, UxItem},
 };
 
-use bitcoin::{psbt::Psbt, sighash::SighashCache, ScriptBuf, bip32::{Fingerprint, DerivationPath}, Transaction, TapSighashType, TxOut};
+use bitcoin::{psbt::Psbt, sighash::SighashCache, ScriptBuf, bip32::{Fingerprint, DerivationPath}, Transaction, TapSighashType, TxOut, TapLeafHash, hashes::Hash};
 
 #[cfg(not(test))]
 use alloc::string::String;
@@ -80,25 +80,37 @@ fn sign_input_ecdsa<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut Sig
     })
 }
 
-fn sign_input_schnorr<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut SighashCache<Transaction>, path: &[u32]) -> Result<PartialSignature<'a>> {
-    // TODO: only BIP86 for now
-
+fn sign_input_schnorr<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut SighashCache<Transaction>, path: &[u32], taptree_hash: Option<[u8; 32]>, leaf_hash: Option<[u8; 32]>) -> Result<PartialSignature<'a>> {
     let sighash_type = TapSighashType::Default; // TODO: only DEFAULT is supported for now
 
     let prevouts = psbt.inputs.iter()
         .map(|input| input.witness_utxo.clone().ok_or(AppError::new("Missing witness utxo")))
         .collect::<Result<Vec<TxOut>>>()?;
 
-    let sighash = sighash_cache.taproot_key_spend_signature_hash(
-        input_index,
-        &bitcoin::sighash::Prevouts::All(&prevouts),
-        sighash_type
-    ).map_err(|_| AppError::new("Error computing sighash"))?;
+        let sighash = if let Some(leaf_hash_bytes) = leaf_hash {
+            sighash_cache.taproot_script_spend_signature_hash(
+                input_index,
+                &bitcoin::sighash::Prevouts::All(&prevouts),
+                TapLeafHash::from_byte_array(leaf_hash_bytes),
+                sighash_type
+            ).map_err(|_| AppError::new("Error computing sighash"))?
+        } else {
+            sighash_cache.taproot_key_spend_signature_hash(
+                input_index,
+                &bitcoin::sighash::Prevouts::All(&prevouts),
+                sighash_type
+            ).map_err(|_| AppError::new("Error computing sighash"))?
+        };
+    
 
     let mut privkey = EcfpPrivateKey::from_path(CxCurve::Secp256k1, path)?;
 
-    // BIP-86-compliant tweak
-    privkey.taptweak(&[])?;
+    if let Some(t) = taptree_hash {
+        privkey.taptweak(&t)?;
+    } else {
+        // BIP-86-compliant tweak
+        privkey.taptweak(&[])?;
+    }
 
     let pubkey = privkey.pubkey()?;
 
@@ -229,12 +241,15 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
                                 partial_signatures.push(partial_signature);
                             },
                             Ok(SegwitVersion::Taproot) => {
-                                if let DescriptorTemplate::Tr(_, tree) = &wallet_policy.descriptor_template {
-                                    if tree.is_some() {
-                                        return Err(AppError::new("Tapscripts are not implemented")); // TODO
+                                // TODO currently only handling key path spends (with or without a taptree)
+                                let taptree_hash = match &wallet_policy.descriptor_template {
+                                    DescriptorTemplate::Tr(_, tree) => {
+                                        tree.as_ref().map(|t| t.get_taptree_hash(&wallet_policy.key_information, is_change, addr_index)).transpose()
                                     }
-                                }
-                                let partial_signature = sign_input_schnorr(&psbt, input_index, &mut sighash_cache, &path)?;
+                                    _ => return Err(AppError::new("Unexpected state: should be a Taproot wallet policy")),
+                                }?;
+
+                                let partial_signature = sign_input_schnorr(&psbt, input_index, &mut sighash_cache, &path, taptree_hash, None)?;
                                 partial_signatures.push(partial_signature);
                             },
                             _ => return Err(AppError::new("Unexpected state: should be SegwitV0 or Taproot")),
@@ -336,7 +351,39 @@ mod tests {
             expected_pubkey0
         );
 
-        let pk0 = EcfpPublicKey::new(CxCurve::Secp256k1, &hex!("0489904a6348d7ff9a44d49db8b6a807c622e868364c547da426f30b5a6213186ab0a271082b6c3740665acbd99a93b7b3a46b847d5293ecc3af50831a2b7a5f8a"));
+        let pk0 = EcfpPublicKey::from_slice(&hex!("0289904a6348d7ff9a44d49db8b6a807c622e868364c547da426f30b5a6213186a")).unwrap();
+        
+        assert!(pk0.schnorr_verify(&sighash0, &resp.partial_signatures[0].signature).is_ok());
+    }
+
+    #[test]
+    fn test_sign_psbt_taproot_one_of_two_keypath() {
+        let psbt_b64 = "cHNidP8BAH0CAAAAARyD92fm9xaA9eCXnykMiMAsCvnIZcdKDpDf1xI8I5QgAAAAAAD9////AkBCDwAAAAAAFgAUbbB+O/G8egsod5XlpAY3nvu+TGyxU4kAAAAAACJRIBaRiwbPPzNW6pfUiY95PwtiIqrb2ODgM6QQ8cHMvuX/AAAAAAABASuAlpgAAAAAACJRIB4TMFcAuIn4KRwUfYSpWHix/oO7tHkcooxVtIy4l4IWIhXB8Ghhpn+RmWZVJHBLEV/D3FinYvLtIIaUH7Z8dciZ100jIAureFzNrWcyATWornuwSSrjQPYZni7QHg+jUrJRiVKErMAhFgureFzNrWcyATWornuwSSrjQPYZni7QHg+jUrJRiVKELQFp8Ywh1OxQTuAEQnoSHXbbu6UcDuDcDmHexTLcj5cmRG0MXisAAAAAAwAAACEW8Ghhpn+RmWZVJHBLEV/D3FinYvLtIIaUH7Z8dciZ100ZAPWswv3zAQCAAQAAgAAAAIAAAAAAAwAAAAEXIPBoYaZ/kZlmVSRwSxFfw9xYp2Ly7SCGlB+2fHXImddNARggafGMIdTsUE7gBEJ6Eh1227ulHA7g3A5h3sUy3I+XJkQAAAEFIB+dMYSodZntC8TH6dZOtrKVhF7npNxJLirsJEqaTXgFAQYlAMAiIDQ/28Tx2vaZxFcJGHT1r3zSMaw0Bl9fWsEWrJBO2jRXrCEHH50xhKh1me0LxMfp1k62spWEXuek3EkuKuwkSppNeAUZAPWswv3zAQCAAQAAgAAAAIABAAAAAAAAACEHND/bxPHa9pnEVwkYdPWvfNIxrDQGX19awRaskE7aNFctAaGJVSkyY1gng9xGPmbEK0OQAYYla4Fa7Q0PhKDn6uGebQxeKwEAAAAAAAAAAA==";
+        let psbt = general_purpose::STANDARD.decode(psbt_b64).unwrap();
+
+        let req = RequestSignPsbt {
+            psbt: Cow::Owned(psbt),
+            name: "Tapscript 1-of-2".into(),
+            descriptor_template: "tr(@0/**,pk(@1/**))".into(),
+            keys_info: vec!["[f5acc2fd/499'/1'/0']tpubDD863BuWFdsaCg6f1SGdwLxp9mDcm3YRm3HxxbppBrizxvU1MqhQ1WpMwhz4vrZHNT7NFbXQ35CquVG9xaLsWaUWfSMZamDESisvtKZ7veF".into(), "tpubDCgZq8booPEaCEE3SFUDV65wEJYeWySipSvZnLXwNYDy6tiGHrvfhXK4hxJHeSEBWt1yy7SY1hU9GFnUtjcnUEfjZBHmYQexj1i7VoEko6a".into()],
+            wallet_hmac: Cow::Owned(DUMMY_HMAC.into()),
+        };
+
+        // correct hmac: a2aa3956ee01ff09862f0836120818d9b526fb7c94479d890517f6111a135979
+
+        let resp = handle_sign_psbt(req).unwrap();
+
+        assert_eq!(1, resp.partial_signatures.len());
+
+        let sighash0 = hex!("be2cef3778a39a6cc1ed44072279656f0e18a32061e7d4ac68f85c5ed24ffe3b");
+        let expected_pubkey0 = hex!("1e13305700b889f8291c147d84a95878b1fe83bbb4791ca28c55b48cb8978216");
+
+        assert_eq!(
+            resp.partial_signatures[0].public_key.as_ref(),
+            expected_pubkey0
+        );
+
+        let pk0 = EcfpPublicKey::from_slice(&hex!("021e13305700b889f8291c147d84a95878b1fe83bbb4791ca28c55b48cb8978216")).unwrap(); // TODO: 02 or 03
         
         assert!(pk0.schnorr_verify(&sighash0, &resp.partial_signatures[0].signature).is_ok());
     }
