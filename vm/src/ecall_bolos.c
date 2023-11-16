@@ -224,6 +224,85 @@ bool sys_ecdsa_verify(eret_t *eret, const guest_pointer_t p_key,
     return true;
 }
 
+// BIP0340 signatures are 64 bytes, but it's larger for other supported curves;
+// currently, no supported curve produces signatures longer than 72 bytes
+#define MAX_SCHNORR_SIGNATURE_SIZE 72
+
+bool sys_schnorr_sign(eret_t *eret, const guest_pointer_t p_key, uint32_t mode,
+                      const cx_md_t hash_id, const guest_pointer_t p_msg, size_t msg_len,
+                      guest_pointer_t p_sig, guest_pointer_t p_sig_len) {
+    cx_ecfp_private_key_t key;
+    uint8_t msg[128];
+    size_t sig_len;
+
+    eret->success = false;
+
+    if (!copy_guest_buffer(p_key, (void *)&key, sizeof(key))) {
+        return false;
+    }
+
+    if (msg_len > sizeof(msg)) {
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_msg, (void *)&msg, msg_len)) {
+        return false;
+    }
+
+    if (!copy_guest_buffer(p_sig_len, (void *)&sig_len, sizeof(sig_len))) {
+        return false;
+    }
+
+    uint8_t sig[MAX_SCHNORR_SIGNATURE_SIZE];
+    cx_err_t err = cx_ecschnorr_sign_no_throw(&key, mode, hash_id, msg, msg_len, sig, &sig_len);
+    if (err != CX_OK || sig_len > sizeof(sig)) {
+        return true;
+    }
+
+    if (!copy_host_buffer(p_sig, sig, sig_len)) {
+        return false;
+    }
+
+    if (!copy_host_buffer(p_sig_len, (void *)&sig_len, sig_len)) {
+        return false;
+    }
+
+    eret->success = true;
+    return true;
+}
+
+bool sys_schnorr_verify(eret_t *eret, const guest_pointer_t p_key, uint32_t mode,
+                        const cx_md_t hash_id, const guest_pointer_t p_msg, size_t msg_len,
+                        const guest_pointer_t p_sig, size_t sig_len) {
+    cx_ecfp_public_key_t key;
+    uint8_t msg[128];
+
+    eret->success = false;
+
+    if (!copy_guest_buffer(p_key, (void *)&key, sizeof(key))) {
+        return false;
+    }
+
+    if (msg_len > sizeof(msg)) {
+        return true;
+    }
+
+    if (!copy_guest_buffer(p_msg, (void *)&msg, msg_len)) {
+        return false;
+    }
+
+    uint8_t sig[MAX_SCHNORR_SIGNATURE_SIZE];
+    if (sig_len > sizeof(sig)) {
+        return true;
+    }
+    if (!copy_guest_buffer(p_sig, sig, sig_len)) {
+        return false;
+    }
+
+    eret->success = cx_ecschnorr_verify(&key, mode, hash_id, msg, msg_len, sig, sig_len);
+    return true;
+}
+
 bool sys_get_random_bytes(guest_pointer_t p_buffer, size_t size)
 {
     while (size > 0) {
@@ -250,9 +329,9 @@ bool sys_get_random_bytes(guest_pointer_t p_buffer, size_t size)
  */
 bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
 {
-    uint8_t r[64], a[32], b[32];
+    uint8_t r[32], a[32], b[32];
 
-    if (len > sizeof(a)) {
+    if (len > sizeof(r)) {
         err("invalid size for addm");
         eret->success = false;
         return true;
@@ -283,7 +362,7 @@ bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
         return true;
     }
 
-    if (!copy_host_buffer(p_r, r, len * 2)) {
+    if (!copy_host_buffer(p_r, r, len)) {
         return false;
     }
 
@@ -297,9 +376,9 @@ bool sys_addm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
  */
 bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
 {
-    uint8_t r[64], a[32], b[32];
+    uint8_t r[32], a[32], b[32];
 
-    if (len > sizeof(a)) {
+    if (len > sizeof(r)) {
         err("invalid size for subm");
         eret->success = false;
         return true;
@@ -330,7 +409,7 @@ bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
         return true;
     }
 
-    if (!copy_host_buffer(p_r, r, len * 2)) {
+    if (!copy_host_buffer(p_r, r, len)) {
         return false;
     }
 
@@ -340,14 +419,21 @@ bool sys_subm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poin
 }
 
 /**
- * If m is NULL, mult().
+ * m can't be NULL
  */
 bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_pointer_t p_b, guest_pointer_t p_m, size_t len)
 {
-    uint8_t r[64], a[32], b[32];
+    uint8_t r[32], a[32], b[32];
 
-    if (len > sizeof(a)) {
+    if (len > sizeof(r)) {
         err("invalid size for multm");
+        eret->success = false;
+        return true;
+    }
+
+    if (p_m.addr == 0) {
+        // unlike add/addm and sub/subm, the length of the result is 2*len in the non-modular version.
+        // therefore, we cannot support it cleanly in the same ecall
         eret->success = false;
         return true;
     }
@@ -360,24 +446,19 @@ bool sys_multm(eret_t *eret, guest_pointer_t p_r, guest_pointer_t p_a, guest_poi
         return false;
     }
 
-    cx_err_t err;
-    if (p_m.addr == 0) {
-        err = cx_math_mult_no_throw(r, a, b, len);
-    } else {
-        uint8_t m[32];
-        if (!copy_guest_buffer(p_m, m, len)) {
-            return false;
-        }
-
-        err = cx_math_multm_no_throw(r, a, b, m, len);
+    uint8_t m[32];
+    if (!copy_guest_buffer(p_m, m, len)) {
+        return false;
     }
+
+    cx_err_t err = cx_math_multm_no_throw(r, a, b, m, len);
 
     if (err != CX_OK) {
         eret->success = false;
         return true;
     }
 
-    if (!copy_host_buffer(p_r, r, len * 2)) {
+    if (!copy_host_buffer(p_r, r, len)) {
         return false;
     }
 
@@ -462,7 +543,6 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
     cx_ecfp_private_key_t private_key = {0};
     cx_ecfp_public_key_t public_key;
 
-    int ret = 0;
 
     // derive the seed with bip32_path
 #pragma GCC diagnostic push
@@ -475,23 +555,20 @@ bool sys_get_master_fingerprint(eret_t *eret, guest_pointer_t p_out)
 #pragma GCC diagnostic pop
 
     // new private_key from raw
-    ret = cx_ecfp_init_private_key_no_throw(CX_CURVE_256K1,
+    int ret1 = cx_ecfp_init_private_key_no_throw(CX_CURVE_256K1,
                                             raw_private_key,
                                             sizeof(raw_private_key),
                                             &private_key);
-    if (ret < 0) {
-        eret->success = false;
-        return true;
-    }
 
     // generate corresponding public key
-    cx_ecfp_generate_pair_no_throw(CX_CURVE_256K1, &public_key, &private_key, 1);
+    int ret2 = cx_ecfp_generate_pair_no_throw(CX_CURVE_256K1, &public_key, &private_key, 1);
 
+    // make sure to delete private key material
     explicit_bzero(raw_private_key, sizeof(raw_private_key));
     explicit_bzero(chain_code, sizeof(chain_code));
     explicit_bzero(&private_key, sizeof(private_key));
 
-    if (ret < 0) {
+    if (ret1 != CX_OK || ret2 != CX_OK) {
         eret->success = false;
         return true;
     }

@@ -268,6 +268,8 @@ ECALL5(ecall_convert, ECALL_CONVERT, bool, uint32_t, format, const uint8_t *, sr
 ECALL5v(ecall_bagl_hal_draw_rect, ECALL_UX_RECTANGLE, unsigned int, color, int, x, int, y, unsigned int, width, unsigned int, height)
 ECALL6(ecall_powm, ECALL_POWM, bool, uint8_t *, r, const uint8_t *, a, const uint8_t *, e, size_t, e_len, const uint8_t *, m, size_t, len)
 ECALL7(ecall_ecdsa_sign, ECALL_ECDSA_SIGN, size_t, const cx_ecfp_private_key_t *, key, const int, mode, const cx_md_t, hash_id, const uint8_t *, hash, uint8_t *, sig, size_t, sig_len, int *, parity)
+ECALL7(ecall_schnorr_sign, ECALL_SCHNORR_SIGN, bool, const cx_ecfp_private_key_t *, key, const uint32_t, mode, const cx_md_t, hash_id, const uint8_t *, msg, size_t, msg_len, uint8_t *, sig, size_t *, sig_len)
+ECALL7(ecall_schnorr_verify, ECALL_SCHNORR_VERIFY, bool, const cx_ecfp_public_key_t *, key, uint32_t, mode, cx_md_t, hash_id, const uint8_t *, msg, size_t, msg_len, const uint8_t *, sig, size_t, sig_len)
 ECALL8v(ecall_bagl_hal_draw_bitmap_within_rect, ECALL_BAGL_DRAW_BITMAP, int, x, int, y, unsigned int, width, unsigned int, height, const unsigned int *, colors, unsigned int, bit_per_pixel, const unsigned char *, bitmap, unsigned int, bitmap_length_bits)
 
 __attribute__((noreturn)) void ecall_exit(int status)

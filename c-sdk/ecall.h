@@ -46,6 +46,23 @@ bool ecall_cx_ecfp_generate_pair(cx_curve_t curve,
                                  cx_ecfp_public_key_t *pubkey,
                                  cx_ecfp_private_key_t *privkey,
                                  bool keep_privkey);
+
+bool ecall_schnorr_sign(const cx_ecfp_private_key_t *privkey,
+                        uint32_t mode,
+                        cx_md_t hash_id,
+                        const uint8_t *msg,
+                        size_t msg_len,
+                        uint8_t *sig,
+                        size_t *sig_len); // TODO: make sig_len not a pointer, and return size_t (like ecall_ecdsa_sign)?
+
+bool ecall_schnorr_verify(const cx_ecfp_public_key_t *pubkey,
+                          uint32_t mode,
+                          cx_md_t hash_id,
+                          const uint8_t *msg,
+                          size_t msg_len,
+                          const uint8_t *sig,
+                          size_t sig_len);
+
 void ecall_get_random_bytes(uint8_t *buffer, const size_t size);
 bool ecall_hash_final(const cx_hash_id_t hash_id, ctx_hash_guest_t *ctx, uint8_t *digest);
 bool ecall_hash_update(const cx_hash_id_t hash_id,

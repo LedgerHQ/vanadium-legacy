@@ -109,32 +109,35 @@ pub enum DescriptorTemplate {
 }
 
 pub struct DescriptorTemplateIter<'a> {
-    fragments: Vec<&'a DescriptorTemplate>,
-    placeholders: Vec<&'a KeyPlaceholder>,
+    fragments: Vec<(&'a DescriptorTemplate, Option<&'a DescriptorTemplate>)>, // Store DescriptorTemplate and its associated leaf context
+    placeholders: Vec<(&'a KeyPlaceholder, Option<&'a DescriptorTemplate>)>,  // Placeholders also carry the leaf context
 }
 
 impl<'a> From<&'a DescriptorTemplate> for DescriptorTemplateIter<'a> {
     fn from(desc: &'a DescriptorTemplate) -> Self {
-        let mut fragments = Vec::new();
-        fragments.push(desc);
         DescriptorTemplateIter {
-            fragments,
+            fragments: vec![(desc, None)], // Initially, there is no associated leaf context
             placeholders: Vec::new(),
         }
     }
 }
 
 impl<'a> Iterator for DescriptorTemplateIter<'a> {
-    type Item = &'a KeyPlaceholder;
+    type Item = (&'a KeyPlaceholder, Option<&'a DescriptorTemplate>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        // If there are pending placeholders, pop and return one
-        if let Some(key) = self.placeholders.pop() {
-            return Some(key);
-        }
+        while self.placeholders.len() > 0 || self.fragments.len() > 0 {
+            // If there are pending placeholders, pop and return one
+            if let Some(item) = self.placeholders.pop() {
+                return Some(item);
+            }
 
-        while let Some(desc) = self.fragments.pop() {
-            match desc {
+            let next_fragment = self.fragments.pop();
+            if next_fragment.is_none() {
+                break;
+            }
+            let (frag, tapleaf_desc) = next_fragment.unwrap();
+            match frag {
                 DescriptorTemplate::Sh(sub)
                 | DescriptorTemplate::Wsh(sub)
                 | DescriptorTemplate::A(sub)
@@ -147,13 +150,13 @@ impl<'a> Iterator for DescriptorTemplateIter<'a> {
                 | DescriptorTemplate::N(sub)
                 | DescriptorTemplate::L(sub)
                 | DescriptorTemplate::U(sub) => {
-                    self.fragments.push(sub);
+                    self.fragments.push((sub, tapleaf_desc));
                 }
 
                 DescriptorTemplate::Andor(sub1, sub2, sub3) => {
-                    self.fragments.push(sub1);
-                    self.fragments.push(sub2);
-                    self.fragments.push(sub3);
+                    self.fragments.push((sub3, tapleaf_desc));
+                    self.fragments.push((sub2, tapleaf_desc));
+                    self.fragments.push((sub1, tapleaf_desc));
                 }
 
                 DescriptorTemplate::Or_b(sub1, sub2)
@@ -163,17 +166,27 @@ impl<'a> Iterator for DescriptorTemplateIter<'a> {
                 | DescriptorTemplate::And_v(sub1, sub2)
                 | DescriptorTemplate::And_b(sub1, sub2)
                 | DescriptorTemplate::And_n(sub1, sub2) => {
-                    self.fragments.push(sub1);
-                    self.fragments.push(sub2);
+                    self.fragments.push((sub2, tapleaf_desc));
+                    self.fragments.push((sub1, tapleaf_desc));
                 }
 
-                DescriptorTemplate::Tr(key, _)
-                | DescriptorTemplate::Pkh(key)
+                DescriptorTemplate::Tr(key, tree) => {
+                    self.placeholders.push((key, None));
+                    if let Some(t) = tree {
+                        let mut leaves: Vec<_> = t.tapleaves().collect();
+                        leaves.reverse();
+                        for leaf in leaves {
+                            self.fragments.push((leaf, Some(leaf)));
+                        }
+                    }
+                }
+
+                DescriptorTemplate::Pkh(key)
                 | DescriptorTemplate::Wpkh(key)
                 | DescriptorTemplate::Pk(key)
                 | DescriptorTemplate::Pk_k(key)
                 | DescriptorTemplate::Pk_h(key) => {
-                    return Some(key);
+                    return Some((key, tapleaf_desc));
                 }
 
                 DescriptorTemplate::Sortedmulti(_, keys)
@@ -182,17 +195,26 @@ impl<'a> Iterator for DescriptorTemplateIter<'a> {
                 | DescriptorTemplate::Multi_a(_, keys) => {
                     // Push keys onto the keys stack in reverse order
                     for key in keys.iter().rev() {
-                        self.placeholders.push(key);
+                        self.placeholders.push((key, tapleaf_desc));
                     }
                 }
 
                 DescriptorTemplate::Thresh(_, descs) => {
                     for desc in descs.iter().rev() {
-                        self.fragments.push(desc);
+                        self.fragments.push((desc, tapleaf_desc));
                     }
                 }
 
-                _ => {}
+                DescriptorTemplate::Zero
+                | DescriptorTemplate::One
+                | DescriptorTemplate::Older(_)
+                | DescriptorTemplate::After(_)
+                | DescriptorTemplate::Sha256(_)
+                | DescriptorTemplate::Ripemd160(_)
+                | DescriptorTemplate::Hash256(_)
+                | DescriptorTemplate::Hash160(_) => {
+                    // nothing to do, there are no placeholders for these
+                }
             }
         }
 
@@ -226,6 +248,39 @@ impl DescriptorTemplate {
 pub enum TapTree {
     Script(Box<DescriptorTemplate>),
     Branch(Box<TapTree>, Box<TapTree>),
+}
+
+impl TapTree {
+    pub fn tapleaves(&self) -> TapleavesIter {
+        TapleavesIter::new(self)
+    }
+}
+
+pub struct TapleavesIter<'a> {
+    stack: Vec<&'a TapTree>,
+}
+
+impl<'a> TapleavesIter<'a> {
+    fn new(root: &'a TapTree) -> Self {
+        TapleavesIter { stack: vec![root] }
+    }
+}
+
+impl<'a> Iterator for TapleavesIter<'a> {
+    type Item = &'a DescriptorTemplate;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(node) = self.stack.pop() {
+            match node {
+                TapTree::Script(descriptor) => return Some(descriptor),
+                TapTree::Branch(left, right) => {
+                    self.stack.push(right);
+                    self.stack.push(left);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl KeyInformation {
@@ -276,7 +331,7 @@ fn parse_descriptor_template(input: &str) -> Result<DescriptorTemplate, &'static
                 Err("Failed to parse descriptor template: extra input remaining")
             }
         }
-        Err(e) => Err("Failed to parse descriptor template"),
+        Err(e) => Err("Failed to parse descriptor template")
     }
 }
 
@@ -1582,5 +1637,51 @@ mod tests {
         ).unwrap();
 
         assert_eq!(wallet.serialize().encode_hex::<String>(), "020c436f6c642073746f726167651fb56c3d5542fa09b3956834a9ff6a1df5c36a38e5b02c63c54b41a9a04403b82602516d2c50a89476ecffeec658057f0110674bbfafc18797dc480c7ed53802f3fb");
+    }
+
+    #[test]
+    fn test_descriptortemplate_placeholders_iterator() {
+        fn format_kp(kp: &KeyPlaceholder) -> String {
+            format!("@{}/<{};{}>/*", kp.key_index, kp.num1, kp.num2)
+        }
+
+        struct TestCase {
+            descriptor: &'static str,
+            expected: Vec<&'static str>,
+        }
+        impl TestCase {
+            fn new(descriptor: &'static str, expected: &[&'static str]) -> Self {
+                Self { descriptor, expected: Vec::from(expected) }
+            }
+        }
+
+        // Define a list of test cases
+        let test_cases = vec![
+            TestCase::new("0", &[]),
+            TestCase::new("after(12345)", &[]),
+            TestCase::new("pkh(@0/**)", &["@0/<0;1>/*"]),
+            TestCase::new("wpkh(@0/<11;67>/*)", &["@0/<11;67>/*"]),
+            TestCase::new("tr(@0/**)", &["@0/<0;1>/*"]),
+            TestCase::new(
+                "wsh(or_i(and_v(v:pkh(@4/<3;7>/*),older(65535)),or_d(multi(2,@0/**,@3/**),and_v(v:thresh(1,pkh(@5/<99;101>/*),a:pkh(@1/**)),older(64231)))))",
+                &["@4/<3;7>/*", "@0/<0;1>/*", "@3/<0;1>/*", "@5/<99;101>/*", "@1/<0;1>/*"]
+            ),
+            TestCase::new(
+                "tr(@0/**,{sortedmulti_a(1,@1/**,@2/**),or_b(pk(@3/**),s:pk(@4/**))})",
+                &["@0/<0;1>/*", "@1/<0;1>/*", "@2/<0;1>/*", "@3/<0;1>/*", "@4/<0;1>/*"]
+            ),
+            TestCase::new(
+                "tr(@0/**,{{{sortedmulti_a(1,@1/**,@2/**,@3/**,@4/**,@5/**),multi_a(2,@6/**,@7/**,@8/**)},{multi_a(2,@9/**,@10/**,@11/**,@12/**),pk(@13/**)}},{{multi_a(2,@14/**,@15/**),multi_a(3,@16/**,@17/**,@18/**)},{multi_a(2,@19/**,@20/**),pk(@21/**)}}})",
+                &["@0/<0;1>/*", "@1/<0;1>/*", "@2/<0;1>/*", "@3/<0;1>/*", "@4/<0;1>/*", "@5/<0;1>/*", "@6/<0;1>/*", "@7/<0;1>/*", "@8/<0;1>/*", "@9/<0;1>/*", "@10/<0;1>/*", "@11/<0;1>/*", "@12/<0;1>/*", "@13/<0;1>/*", "@14/<0;1>/*", "@15/<0;1>/*", "@16/<0;1>/*", "@17/<0;1>/*", "@18/<0;1>/*", "@19/<0;1>/*", "@20/<0;1>/*", "@21/<0;1>/*"]
+            ),
+        ];
+
+        for case in test_cases {
+            let desc = DescriptorTemplate::from_str(case.descriptor).unwrap();
+            let iter = DescriptorTemplateIter::from(&desc);
+            let results: Vec<_> = iter.map(|(k, _)| format_kp(k)).collect();
+
+            assert_eq!(results, case.expected);
+        }
     }
 }
