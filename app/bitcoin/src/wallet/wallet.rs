@@ -109,36 +109,35 @@ pub enum DescriptorTemplate {
 }
 
 pub struct DescriptorTemplateIter<'a> {
-    fragments: Vec<&'a DescriptorTemplate>,
-    placeholders: Vec<&'a KeyPlaceholder>,
+    fragments: Vec<(&'a DescriptorTemplate, Option<&'a DescriptorTemplate>)>, // Store DescriptorTemplate and its associated leaf context
+    placeholders: Vec<(&'a KeyPlaceholder, Option<&'a DescriptorTemplate>)>,  // Placeholders also carry the leaf context
 }
 
 impl<'a> From<&'a DescriptorTemplate> for DescriptorTemplateIter<'a> {
     fn from(desc: &'a DescriptorTemplate) -> Self {
-        let mut fragments = Vec::new();
-        fragments.push(desc);
         DescriptorTemplateIter {
-            fragments,
+            fragments: vec![(desc, None)], // Initially, there is no associated leaf context
             placeholders: Vec::new(),
         }
     }
 }
 
 impl<'a> Iterator for DescriptorTemplateIter<'a> {
-    type Item = &'a KeyPlaceholder;
+    type Item = (&'a KeyPlaceholder, Option<&'a DescriptorTemplate>);
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.placeholders.len() > 0 || self.fragments.len() > 0 {
             // If there are pending placeholders, pop and return one
-            if let Some(key) = self.placeholders.pop() {
-                return Some(key);
+            if let Some(item) = self.placeholders.pop() {
+                return Some(item);
             }
 
             let next_fragment = self.fragments.pop();
             if next_fragment.is_none() {
                 break;
             }
-            match next_fragment.unwrap() {
+            let (frag, tapleaf_desc) = next_fragment.unwrap();
+            match frag {
                 DescriptorTemplate::Sh(sub)
                 | DescriptorTemplate::Wsh(sub)
                 | DescriptorTemplate::A(sub)
@@ -151,13 +150,13 @@ impl<'a> Iterator for DescriptorTemplateIter<'a> {
                 | DescriptorTemplate::N(sub)
                 | DescriptorTemplate::L(sub)
                 | DescriptorTemplate::U(sub) => {
-                    self.fragments.push(sub);
+                    self.fragments.push((sub, tapleaf_desc));
                 }
 
                 DescriptorTemplate::Andor(sub1, sub2, sub3) => {
-                    self.fragments.push(sub3);
-                    self.fragments.push(sub2);
-                    self.fragments.push(sub1);
+                    self.fragments.push((sub3, tapleaf_desc));
+                    self.fragments.push((sub2, tapleaf_desc));
+                    self.fragments.push((sub1, tapleaf_desc));
                 }
 
                 DescriptorTemplate::Or_b(sub1, sub2)
@@ -167,16 +166,18 @@ impl<'a> Iterator for DescriptorTemplateIter<'a> {
                 | DescriptorTemplate::And_v(sub1, sub2)
                 | DescriptorTemplate::And_b(sub1, sub2)
                 | DescriptorTemplate::And_n(sub1, sub2) => {
-                    self.fragments.push(sub2);
-                    self.fragments.push(sub1);
+                    self.fragments.push((sub2, tapleaf_desc));
+                    self.fragments.push((sub1, tapleaf_desc));
                 }
 
                 DescriptorTemplate::Tr(key, tree) => {
-                    self.placeholders.push(key);
+                    self.placeholders.push((key, None));
                     if let Some(t) = tree {
                         let mut leaves: Vec<_> = t.tapleaves().collect();
                         leaves.reverse();
-                        self.fragments.extend(leaves);
+                        for leaf in leaves {
+                            self.fragments.push((leaf, Some(leaf)));
+                        }
                     }
                 }
 
@@ -185,7 +186,7 @@ impl<'a> Iterator for DescriptorTemplateIter<'a> {
                 | DescriptorTemplate::Pk(key)
                 | DescriptorTemplate::Pk_k(key)
                 | DescriptorTemplate::Pk_h(key) => {
-                    return Some(key);
+                    return Some((key, tapleaf_desc));
                 }
 
                 DescriptorTemplate::Sortedmulti(_, keys)
@@ -194,13 +195,13 @@ impl<'a> Iterator for DescriptorTemplateIter<'a> {
                 | DescriptorTemplate::Multi_a(_, keys) => {
                     // Push keys onto the keys stack in reverse order
                     for key in keys.iter().rev() {
-                        self.placeholders.push(key);
+                        self.placeholders.push((key, tapleaf_desc));
                     }
                 }
 
                 DescriptorTemplate::Thresh(_, descs) => {
                     for desc in descs.iter().rev() {
-                        self.fragments.push(desc);
+                        self.fragments.push((desc, tapleaf_desc));
                     }
                 }
 
@@ -1678,7 +1679,7 @@ mod tests {
         for case in test_cases {
             let desc = DescriptorTemplate::from_str(case.descriptor).unwrap();
             let iter = DescriptorTemplateIter::from(&desc);
-            let results: Vec<_> = iter.map(format_kp).collect();
+            let results: Vec<_> = iter.map(|(k, _)| format_kp(k)).collect();
 
             assert_eq!(results, case.expected);
         }

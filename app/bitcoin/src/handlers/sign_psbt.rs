@@ -4,7 +4,8 @@ use vanadium_sdk::crypto::{CxCurve, CxMd, EcfpPrivateKey, CX_RND_RFC6979, EcfpPu
 
 use crate::{
     message::message::{PartialSignature, RequestSignPsbt, ResponseSignPsbt},
-    wallet::{WalletPolicy, SegwitVersion, KeyOrigin, KeyPlaceholder, DescriptorTemplate}, taproot::{TapTweak, TapTreeHash},
+    wallet::{WalletPolicy, SegwitVersion, KeyOrigin, KeyPlaceholder, DescriptorTemplate},
+    taproot::{TapTweak, GetTapTreeHash, GetTapLeafHash},
 };
 
 #[cfg(not(test))]
@@ -102,14 +103,15 @@ fn sign_input_schnorr<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut S
             ).map_err(|_| AppError::new("Error computing sighash"))?
         };
     
-
     let mut privkey = EcfpPrivateKey::from_path(CxCurve::Secp256k1, path)?;
 
-    if let Some(t) = taptree_hash {
-        privkey.taptweak(&t)?;
-    } else {
-        // BIP-86-compliant tweak
-        privkey.taptweak(&[])?;
+    if leaf_hash.is_none() {
+        if let Some(t) = taptree_hash {
+            privkey.taptweak(&t)?;
+        } else {
+            // BIP-86-compliant tweak
+            privkey.taptweak(&[])?;
+        }
     }
 
     let pubkey = privkey.pubkey()?;
@@ -123,7 +125,10 @@ fn sign_input_schnorr<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut S
     Ok(PartialSignature {
         signature: Cow::Owned(signature),
         public_key: Cow::Owned(pubkey.to_compressed()[1..].to_vec()), // x-only pubkey
-        leaf_hash: Cow::Owned(vec![]),
+        leaf_hash: Cow::Owned(match leaf_hash {
+            Some(hash) => hash.to_vec(),
+            None => Vec::new(),
+        }),
     })
 }
 
@@ -207,14 +212,13 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
 
     let master_fingerprint = vanadium_sdk::crypto::get_master_fingerprint()?;
 
-    for placeholder in wallet_policy.descriptor_template.placeholders() {
+    for (placeholder, tapleaf_desc) in wallet_policy.descriptor_template.placeholders() {
         // TODO: check if key is internal; for now we just trust the fingerprint
 
         let key_info = wallet_policy.key_information[placeholder.key_index as usize].clone();
         if let Some(key_origin) = key_info.origin_info.as_ref().filter(|x| x.fingerprint == master_fingerprint) {
             // for each input, verify if we can match the derivation with the current placeholder
             if let Some((is_change, addr_index)) = find_change_and_addr_index(&psbt, &wallet_policy, &placeholder, &key_origin, master_fingerprint) {
-    
                 let mut path = key_info.origin_info.unwrap().derivation_path;
     
                 path.push(if !is_change {
@@ -223,7 +227,7 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
                     placeholder.num2
                 });
                 path.push(addr_index);
-    
+
                 for (input_index, input) in psbt.inputs.iter().enumerate() {
                     if let Some(witness_utxo) = &input.witness_utxo {
                         // sign all segwit types (including wrapped)
@@ -249,7 +253,11 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
                                     _ => return Err(AppError::new("Unexpected state: should be a Taproot wallet policy")),
                                 }?;
 
-                                let partial_signature = sign_input_schnorr(&psbt, input_index, &mut sighash_cache, &path, taptree_hash, None)?;
+                                let leaf_hash = tapleaf_desc
+                                    .map(|desc| desc.get_tapleaf_hash(&wallet_policy.key_information, is_change, addr_index))
+                                    .transpose()?;
+
+                                let partial_signature = sign_input_schnorr(&psbt, input_index, &mut sighash_cache, &path, taptree_hash, leaf_hash)?;
                                 partial_signatures.push(partial_signature);
                             },
                             _ => return Err(AppError::new("Unexpected state: should be SegwitV0 or Taproot")),
@@ -383,8 +391,85 @@ mod tests {
             expected_pubkey0
         );
 
-        let pk0 = EcfpPublicKey::from_slice(&hex!("021e13305700b889f8291c147d84a95878b1fe83bbb4791ca28c55b48cb8978216")).unwrap(); // TODO: 02 or 03
-        
+        let pk0 = EcfpPublicKey::from_slice(&hex!("021e13305700b889f8291c147d84a95878b1fe83bbb4791ca28c55b48cb8978216")).unwrap();
+
+        assert!(pk0.schnorr_verify(&sighash0, &resp.partial_signatures[0].signature).is_ok());
+    }
+
+    #[test]
+    fn test_sign_psbt_taproot_one_of_two_scriptpath() {
+        let psbt_b64 = "cHNidP8BAH0CAAAAAeBlTa1pssUA7CgCLgfd4OboYX92uYKzC3mc0Kd7G5g/AQAAAAD9////AkBCDwAAAAAAFgAUM7ZA3qe/76dyjkXUY91rjHyGT46xU4kAAAAAACJRIEUjFCPb+bIyA5ajhLXpUmVnevH/Cva3kF/nGEnnTU3UAAAAAAABASuAlpgAAAAAACJRICpH2ZLtvOaEXKucNkhSGQ4KXAKcuZdLv12HLiaCkaGqIhXAUUAi0WoVpbHdhlhDArD0YCKxsI4gH8OopKkvpJmNo0QjIPBoYaZ/kZlmVSRwSxFfw9xYp2Ly7SCGlB+2fHXImddNrMAhFlFAItFqFaWx3YZYQwKw9GAisbCOIB/DqKSpL6SZjaNEDQAGEsg4AAAAAAMAAAAhFvBoYaZ/kZlmVSRwSxFfw9xYp2Ly7SCGlB+2fHXImddNOQFNr+UKO/a0qUFBXpxRR8k8bNcc0xf06X/6ktl6j3hmDfWswv3zAQCAAQAAgAAAAIAAAAAAAwAAAAEXIFFAItFqFaWx3YZYQwKw9GAisbCOIB/DqKSpL6SZjaNEARggTa/lCjv2tKlBQV6cUUfJPGzXHNMX9Ol/+pLZeo94Zg0AAAEFILfHwWcz2lMQ+4BjBY+9BI8R0br59uVGNp7U6oOQGn2DAQYlAMAiIB+dMYSodZntC8TH6dZOtrKVhF7npNxJLirsJEqaTXgFrCEHH50xhKh1me0LxMfp1k62spWEXuek3EkuKuwkSppNeAU5AZenZqSVLNhaynTQlVY2EqPYnzBzBawAp+hu10OiRNQQ9azC/fMBAIABAACAAAAAgAEAAAAAAAAAIQe3x8FnM9pTEPuAYwWPvQSPEdG6+fblRjae1OqDkBp9gw0ABhLIOAEAAAAAAAAAAA==";
+        let psbt = general_purpose::STANDARD.decode(psbt_b64).unwrap();
+
+        let req = RequestSignPsbt {
+            psbt: Cow::Owned(psbt),
+            name: "Tapscript 1-of-2".into(),
+            descriptor_template: "tr(@0/**,pk(@1/**))".into(),
+            keys_info: vec!["tpubDD4GfCYs14EsPL4zKXxqfsaRmSHKVb2zVRNeYT6Dvf6qV7k9tDenuAkfu9hkJDmCfGdSdEY8AAN3ksM5vUf4BzQX4ZYzsJViB6PqDa88zJD".into(), "[f5acc2fd/499'/1'/0']tpubDD863BuWFdsaCg6f1SGdwLxp9mDcm3YRm3HxxbppBrizxvU1MqhQ1WpMwhz4vrZHNT7NFbXQ35CquVG9xaLsWaUWfSMZamDESisvtKZ7veF".into()],
+            wallet_hmac: Cow::Owned(DUMMY_HMAC.into()),
+        };
+
+        // correct hmac: 39bc8b31d8dbdf7ca9def761f424415278b3979f0f02fe944390fc274d22a23c
+
+        let resp = handle_sign_psbt(req).unwrap();
+
+        assert_eq!(1, resp.partial_signatures.len());
+
+        let expected_pubkey0 = hex!("f06861a67f9199665524704b115fc3dc58a762f2ed2086941fb67c75c899d74d");
+        assert_eq!(
+            resp.partial_signatures[0].public_key.as_ref(),
+            expected_pubkey0
+        );
+
+        assert_eq!(
+            resp.partial_signatures[0].leaf_hash.as_ref(),
+            hex!("4dafe50a3bf6b4a941415e9c5147c93c6cd71cd317f4e97ffa92d97a8f78660d")
+        );
+
+        let sighash0 = hex!("8de18c56cd1c46dc29580066e3110c96b34c12e11657f9b4715e9d8608afa5bf");
+        let pk0 = EcfpPublicKey::from_slice(&hex!("02f06861a67f9199665524704b115fc3dc58a762f2ed2086941fb67c75c899d74d")).unwrap();
+        assert!(pk0.schnorr_verify(&sighash0, &resp.partial_signatures[0].signature).is_ok());
+    }
+
+    #[test]
+    fn test_sign_psbt_taproot_mixed_leaves() {
+        let psbt_b64 = "cHNidP8BAH0CAAAAAT/s+bFWC4qSdCgu8vBg0R3Is6F5V++DlzxfJW5iooA5AQAAAAD9////ArFTiQAAAAAAIlEgYSuRcVrAMItU1ZKLbM52s/Mldzv/NW1V1RFTwKaiOEtAQg8AAAAAABYAFD1rSF6Ut32Gl7uqITdK0dgjp0AjAAAAAAABASuAlpgAAAAAACJRIMsSsCReA4mYZcgXEFyweaQml7W2NubI28JFaUprJ23ZQhXBqMCJq89i2G1g5l1+2h2QXtUs2BWxLCjC1/AsvIlUelAU6uxZMl3c47bD6R2bctreuU58yURlmCDUCW4VtCPPA0cgjllRI6lh/yR/tvtlWJx8T1+ZjO7aT8CxxBYtEccvvzysfCDX8NE482/sEFPdWfIOiQmBEHfIKC5+VqJfX2k4oOmlnaybwEIVwajAiavPYthtYOZdftodkF7VLNgVsSwowtfwLLyJVHpQzEfVpJ5XzfEGJJl2MqubgZyzTb/+Okz26rqq9hBF2sxHIKCIZm4YKSGJj1/xqvCGUpl2ZSIfNc2V6irXLfFJa7xWrCDwaGGmf5GZZlUkcEsRX8PcWKdi8u0ghpQftnx1yJnXTbpRnMAhFo5ZUSOpYf8kf7b7ZVicfE9fmYzu2k/AscQWLRHHL788LQHMR9WknlfN8QYkmXYyq5uBnLNNv/46TPbquqr2EEXazHrQB5MAAAAAAwAAACEWoIhmbhgpIYmPX/Gq8IZSmXZlIh81zZXqKtct8UlrvFYtARTq7FkyXdzjtsPpHZty2t65TnzJRGWYINQJbhW0I88DHA1sHwAAAAADAAAAIRaowImrz2LYbWDmXX7aHZBe1SzYFbEsKMLX8Cy8iVR6UA0A6xNxJQAAAAADAAAAIRbX8NE482/sEFPdWfIOiQmBEHfIKC5+VqJfX2k4oOmlnS0BzEfVpJ5XzfEGJJl2MqubgZyzTb/+Okz26rqq9hBF2szT2HrVAAAAAAMAAAAhFvBoYaZ/kZlmVSRwSxFfw9xYp2Ly7SCGlB+2fHXImddNOQEU6uxZMl3c47bD6R2bctreuU58yURlmCDUCW4VtCPPA/Wswv3zAQCAAQAAgAAAAIAAAAAAAwAAAAEXIKjAiavPYthtYOZdftodkF7VLNgVsSwowtfwLLyJVHpQARggY4rj54n2Z6TO4klOVN9Kgv6NeB8L6utSoCwcSTpWAyQAAQUgfqC9jk3ICC0fdbfRF75U5dv+jdD4Qbr9TdEhKibYA4wBBpIBwEYgpL3cigfm7EOtnj/BqvkHtJV5SdwcGDNBRRC1iwoVQH+sfCBYgOVhZ1qi3FS+xZ0gYIsg9zTgzYWB5FFtVH4UlubcMqybAcBGIB+dMYSodZntC8TH6dZOtrKVhF7npNxJLirsJEqaTXgFrCBMGqLLsl79NuU6CLyrU8/a8J5Z5/R0zmPwCWK7Q2JQr7pRnCEHH50xhKh1me0LxMfp1k62spWEXuek3EkuKuwkSppNeAU5AeV0ozvJnbG/u6fNbexpRBrT3f+loDkin4I2sW71L3D99azC/fMBAIABAACAAAAAgAEAAAAAAAAAIQdMGqLLsl79NuU6CLyrU8/a8J5Z5/R0zmPwCWK7Q2JQry0B5XSjO8mdsb+7p81t7GlEGtPd/6WgOSKfgjaxbvUvcP0cDWwfAQAAAAAAAAAhB1iA5WFnWqLcVL7FnSBgiyD3NODNhYHkUW1UfhSW5twyLQHCMIvATlZBGefKCXTa/otZr6BB28tYknXccfHHwJtYJdPYetUBAAAAAAAAACEHfqC9jk3ICC0fdbfRF75U5dv+jdD4Qbr9TdEhKibYA4wNAOsTcSUBAAAAAAAAACEHpL3cigfm7EOtnj/BqvkHtJV5SdwcGDNBRRC1iwoVQH8tAcIwi8BOVkEZ58oJdNr+i1mvoEHby1iSddxx8cfAm1gletAHkwEAAAAAAAAAAAA=";
+        let psbt = general_purpose::STANDARD.decode(psbt_b64).unwrap();
+
+        let req = RequestSignPsbt {
+            psbt: Cow::Owned(psbt),
+            name: "Mixed tapminiscript and not".into(),
+            descriptor_template: "tr(@0/**,{sortedmulti_a(1,@1/**,@2/**),or_b(pk(@3/**),s:pk(@4/**))})".into(),
+            keys_info: vec![
+                "tpubDCYGWahE7aGXr9NLhJBwyE8CmLWDq3T6bEJTFN47jREEtKk5thyZhQwpTbDAXan6Ra1bSF63JjV4eiaHwVE2YzZ9N6myRRSCW2ZM3C4Udcg".into(),
+                "[f5acc2fd/499'/1'/0']tpubDD863BuWFdsaCg6f1SGdwLxp9mDcm3YRm3HxxbppBrizxvU1MqhQ1WpMwhz4vrZHNT7NFbXQ35CquVG9xaLsWaUWfSMZamDESisvtKZ7veF".into(),
+                "tpubDCTUEzaPKfWk4bSmVKY11FtbK3FZS3AdYPati8WTbH6Nzdaw7wEW8SeYbsqHbnH46bhnZaC45ua4pug4kzDbE29WXxZQ61LwjbeKqQ5dnQQ".into(),
+                "tpubDCa4qupLAGRh3vXKS8hH1aJySQd4dKA4L8QsVLYXQZbcNYZqYvf1nJ57pZAVjzeV9D2wevL7UWkqdupWezBw1i3y3PpvmS2iZh5BiJCgYkq".into(),
+                "tpubDDgFur3VTfVC4TD9wNBBXaJmfz6evDY6Hng6paUYCEUd6PHmBW8wtvTzus2HaCnbs7wq7TDnSkMchdKPteDVLGZnb19WiT3EcrEcXkeZVgk".into()
+            ],
+            wallet_hmac: Cow::Owned(DUMMY_HMAC.into()),
+        };
+
+        // correct hmac: 4c2f6e1f716bf889517379567aa53a8562bd731191b156509429bccd32f11cf0
+
+        let resp = handle_sign_psbt(req).unwrap();
+
+        assert_eq!(1, resp.partial_signatures.len());
+
+        let sighash0 = hex!("128fcd3ec58c3ebe44f604fccf692ab2c6917185d944854c2899c2d224fad479");
+        let expected_pubkey0 = hex!("f06861a67f9199665524704b115fc3dc58a762f2ed2086941fb67c75c899d74d");
+
+        assert_eq!(
+            resp.partial_signatures[0].public_key.as_ref(),
+            expected_pubkey0
+        );
+
+        assert_eq!(
+            resp.partial_signatures[0].leaf_hash.as_ref(),
+            hex!("14eaec59325ddce3b6c3e91d9b72dadeb94e7cc944659820d4096e15b423cf03")
+        );
+
+        let pk0 = EcfpPublicKey::from_slice(&hex!("02f06861a67f9199665524704b115fc3dc58a762f2ed2086941fb67c75c899d74d")).unwrap();
         assert!(pk0.schnorr_verify(&sighash0, &resp.partial_signatures[0].signature).is_ok());
     }
 }

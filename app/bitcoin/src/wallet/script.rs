@@ -12,7 +12,7 @@ use vanadium_sdk::crypto::EcfpPublicKey;
 
 use crate::crypto::{hash160, sha256};
 
-use crate::taproot::TapTreeHash;
+use crate::taproot::GetTapTreeHash;
 use crate::wallet::bip32::ExtendedPubKey;
 
 use crate::{

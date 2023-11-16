@@ -1,7 +1,7 @@
 use bitcoin::{VarInt, consensus::encode};
 use vanadium_sdk::crypto::{EcfpPrivateKey, CtxSha256, EcfpPublicKey, secp256k1_point};
 
-use crate::{error::AppError, wallet::{TapTree, script::{ToScriptWithKeyInfo, ScriptContext}, KeyInformation}};
+use crate::{error::AppError, wallet::{TapTree, script::{ToScriptWithKeyInfo, ScriptContext}, KeyInformation, DescriptorTemplate}};
 
 pub const BIP0341_TAPTWEAK_TAG: &[u8; 8] = b"TapTweak";
 pub const BIP0341_TAPBRANCH_TAG: &[u8; 9] = b"TapBranch";
@@ -61,21 +61,14 @@ impl TapTweak for EcfpPublicKey {
     }
 }
 
-pub trait TapTreeHash {
+pub trait GetTapTreeHash {
     fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError>;
 }
 
-impl TapTreeHash for TapTree {
+impl GetTapTreeHash for TapTree {
     fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError> {
         match self {
-            TapTree::Script(leaf_desc) => {
-                let mut ctx = new_tagged_hash(BIP0341_TAPLEAF_TAG);
-                ctx.update(&[0xC0u8]); // leaf version
-                let leaf_script = leaf_desc.to_script(key_information, is_change, address_index, ScriptContext::Tr)?;
-                ctx.update(&encode::serialize(&VarInt(leaf_script.len() as u64)));
-                ctx.update(&leaf_script.to_bytes());
-                Ok(ctx.r#final())
-            },
+            TapTree::Script(leaf_desc) => leaf_desc.get_tapleaf_hash(key_information, is_change, address_index),
             TapTree::Branch(l, r) => {
                 let hash_left = l.get_taptree_hash(key_information, is_change, address_index)?;
                 let hash_right = r.get_taptree_hash(key_information, is_change, address_index)?;
@@ -89,6 +82,20 @@ impl TapTreeHash for TapTree {
     }
 }
 
+pub trait GetTapLeafHash {
+    fn get_tapleaf_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError>;
+}
+
+impl GetTapLeafHash for DescriptorTemplate {
+    fn get_tapleaf_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError> {
+        let mut ctx = new_tagged_hash(BIP0341_TAPLEAF_TAG);
+        ctx.update(&[0xC0u8]); // leaf version
+        let leaf_script = self.to_script(key_information, is_change, address_index, ScriptContext::Tr)?;
+        ctx.update(&encode::serialize(&VarInt(leaf_script.len() as u64)));
+        ctx.update(&leaf_script.to_bytes());
+        Ok(ctx.r#final())
+    }
+}
 
 #[cfg(test)]
 mod tests {
