@@ -1,5 +1,6 @@
 use vanadium_sdk::glyphs::{ICON_CROSSMARK, ICON_EYE, ICON_VALIDATE};
 use vanadium_sdk::ux::*;
+use alloc::string::String;
 
 pub fn sign_tx_validation(send_amount: &str, get_amount: &str, fees: &str) -> bool {
     let swap_ui: [UxItem; 6] = [
@@ -43,4 +44,43 @@ pub fn sign_tx_validation(send_amount: &str, get_amount: &str, fees: &str) -> bo
 
     app_loading_stop();
     ux_validate(&swap_ui)
+}
+
+pub fn address_validation(address: &String) -> bool {
+    
+    let validate_ui: [UxItem; 5] = [
+            UxItem {
+                icon: Some(&ICON_EYE),
+                line1: "Confirm Address",
+                line2: None,
+                action: UxAction::None,
+            },
+            UxItem {
+                icon: Some(&ICON_EYE),
+                line1: &address[..16],
+                line2: Some(&address[16..32]),
+                action: UxAction::None,
+            },
+            UxItem {
+                icon: Some(&ICON_EYE),
+                line1: &address[32..],
+                line2: None,
+                action: UxAction::None,
+            },
+            UxItem {
+                icon: Some(&ICON_VALIDATE),
+                line1: "Accept",
+                line2: Some("and send"),
+                action: UxAction::Validate,
+            },
+            UxItem {
+                icon: Some(&ICON_CROSSMARK),
+                line1: "Reject",
+                line2: None,
+                action: UxAction::Reject,
+            }
+        ];
+        app_loading_stop();
+        
+        ux_validate(&validate_ui)
 }

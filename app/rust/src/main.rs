@@ -14,17 +14,12 @@ extern crate vanadium_sdk;
 #[cfg(not(target_arch = "riscv32"))]
 extern crate core;
 
-mod btc;
-mod currency;
 mod error;
-mod eth;
-mod ledger_swap;
 mod message;
-mod partner;
-mod swap;
 mod ui;
 mod version;
 mod comm;
+mod handler;
 
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
@@ -36,26 +31,12 @@ use error::*;
 use message::boiler::mod_Request::OneOfrequest;
 use message::boiler::mod_Response::OneOfresponse;
 use message::boiler::*;
-use swap::*;
+use handler::*;
 
 use vanadium_sdk::fatal;
 
 #[cfg(test)]
 use hex_literal::hex;
-
-use version::{APP_VERSION, APP_NAME};
-
-fn handle_get_version<'a>() -> ResponseGetVersion<'a> {
-    ResponseGetVersion {
-        version: Cow::Borrowed(core::str::from_utf8(APP_VERSION.as_slice()).unwrap()),
-    }
-}
-
-fn handle_get_appname<'a>() -> ResponseGetAppName<'a> {
-    ResponseGetAppName {
-        appname: Cow::Borrowed(core::str::from_utf8(APP_NAME.as_slice()).unwrap()),
-    }
-}
 
 fn set_error(msg: &'_ str) -> ResponseError {
     ResponseError {
@@ -74,18 +55,13 @@ impl From<&'static str> for ResponseError<'_> {
 fn handle_req_(buffer: &[u8]) -> Result<Response> {
     let pb_bytes = buffer.to_vec();
     let mut reader = BytesReader::from_bytes(&pb_bytes);
-    let request: Request<'_> = Request::from_reader(&mut reader, &pb_bytes)?;
+    let request = Request::from_reader(&mut reader, &pb_bytes)?;
 
     let response = Response {
         response: match request.request {
             OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()),
             OneOfrequest::get_appname(_) => OneOfresponse::get_appname(handle_get_appname()),
-            OneOfrequest::init_swap(init_swap) => {
-                OneOfresponse::init_swap(handle_init_swap(&init_swap))
-            }
-            OneOfrequest::init_sell(_init_sell) => OneOfresponse::error("todo: init_sell".into()),
-            OneOfrequest::swap(swap) => OneOfresponse::swap(handle_swap(&swap)?),
-            OneOfrequest::sell(_sell) => OneOfresponse::error("todo: sell".into()),
+            OneOfrequest::get_pubkey(getpubkey) => OneOfresponse::get_pubkey(handle_get_pubkey(&getpubkey)?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };

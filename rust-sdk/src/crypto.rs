@@ -94,6 +94,10 @@ pub struct EcfpPrivateKey {
     curve: CxCurve,
     d_len: usize,
     d: [u8; 32],
+    /// chain code len 
+    cc_len: usize,
+    /// chain code
+    cc: [u8; 32] 
 }
 
 #[derive(Clone, Copy)]
@@ -487,17 +491,19 @@ impl EcfpPublicKey {
 }
 
 impl EcfpPrivateKey {
-    pub fn new(curve: CxCurve, bytes: &[u8; 32]) -> Self {
+    pub fn new(curve: CxCurve, bytes: &[u8; 32], chain_code: &[u8; 32]) -> Self {
         Self {
             curve,
             d_len: 32,
             d: *bytes,
+            cc_len: 32,
+            cc: *chain_code,
         }
     }
 
     pub fn from_path(curve: CxCurve, path: &[u32]) -> Result<EcfpPrivateKey, SdkError> {
-        let mut privkey = Self::new(curve, &[0; 32]);
-        derive_node_bip32(curve, path, Some(&mut privkey.d), None)?;
+        let mut privkey = Self::new(curve, &[0; 32], &[0; 32]);
+        derive_node_bip32(curve, path, Some(&mut privkey.d), Some(&mut privkey.cc))?;
         Ok(privkey)
     }
 
@@ -506,6 +512,8 @@ impl EcfpPrivateKey {
             curve: self.curve,
             d_len: self.d_len,
             d: self.d,
+            cc_len: self.cc_len,
+            cc: self.cc
         };
         let mut pubkey = EcfpPublicKey {
             curve: self.curve,
@@ -514,6 +522,10 @@ impl EcfpPrivateKey {
         };
         ecfp_generate_keypair(self.curve, &mut pubkey, &mut privkey, true)?;
         Ok(pubkey)
+    }
+
+    pub fn chaincode(&self) -> Result<[u8; 32], SdkError> {
+        Ok(self.cc)
     }
 
     // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?
@@ -620,7 +632,8 @@ mod tests {
     #[test]
     fn test_ecdsa_sign_verify() {
         let key_raw = [42u8; 32];
-        let mut privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &key_raw);
+        let chain_code = [0u8; 32];
+        let mut privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &key_raw, &chain_code);
         let mut pubkey = EcfpPublicKey::new(CxCurve::Secp256k1, &[0u8; 65]);
         ecfp_generate_keypair(CxCurve::Secp256k1, &mut pubkey, &mut privkey, true).unwrap();
 

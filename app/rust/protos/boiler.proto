@@ -20,55 +20,15 @@ message ResponseGetAppName {
   string appname = 1;
 };
 
-message RequestInitSwap {
+message RequestGetPubKey {
+  bool display = 1;
+  repeated uint32 path = 2;
 };
 
-message ResponseInitSwap {
-  bytes device_id = 1;
-};
-
-message RequestInitSell {
-};
-
-message ResponseInitSell {
-  bytes device_id = 1;
-};
-
-message Partner {
-  string name = 1;
-  bytes pubkey = 2;
-  bytes signature = 3;
-};
-
-message RequestSwap {
-  Partner partner = 1;
-  bytes pb_tx = 2;
-  bytes signature = 3;
-  bytes fee = 4;
-
-  repeated uint32 payout_path = 5;
-  repeated uint32 refund_path = 6;
-
-  bytes payout_addr_params = 7;
-  bytes refund_addr_params = 8;
-};
-
-message ResponseSwap {
-  bool approved = 1;
-  bytes tx = 2;
-};
-
-message RequestSell {
-  Partner partner = 1;
-  bytes b64_tx = 2;
-  bytes signature = 3;
-  bytes fee = 4;
-};
-
-message ResponseSell {
-  bool approved = 1;
-  bytes signature = 2;
-};
+message ResponseGetPubKey {
+  string pubkey = 1;
+  string chaincode = 2;
+}
 
 message ResponseError {
   string error_msg = 1;
@@ -78,10 +38,7 @@ message Request {
   oneof request {
     RequestGetVersion get_version = 1;
     RequestGetAppName get_appname = 2;
-    RequestInitSwap init_swap = 3;
-    RequestInitSell init_sell = 4;
-    RequestSwap swap = 5;
-    RequestSell sell = 6;
+    RequestGetPubKey get_pubkey = 3;
   }
 }
 
@@ -89,10 +46,7 @@ message Response {
   oneof response {
     ResponseGetVersion get_version = 1;
     ResponseGetAppName get_appname = 2;
-    ResponseInitSwap init_swap = 3;
-    ResponseInitSell init_sell = 4;
-    ResponseSwap swap = 5;
-    ResponseSell sell = 6;
-    ResponseError error = 7;
+    ResponseGetPubKey get_pubkey = 3;
+    ResponseError error = 4;
   }
 }

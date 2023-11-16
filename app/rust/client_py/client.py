@@ -15,7 +15,7 @@ from prompt_toolkit.history import FileHistory
 from argparse import ArgumentParser
 from typing import Optional
 
-from boiler_pb2 import RequestGetVersion, RequestGetAppName, Request, Response
+from boiler_pb2 import RequestGetVersion, RequestGetAppName, RequestGetPubKey, Request, Response
 from util import bip32_path_to_list
 
 # TODO: make a proper package for the stream.py module
@@ -98,6 +98,27 @@ class Client:
         assert response.WhichOneof("response") == "get_appname"
         print(f"appname: {response.get_appname.appname}")
         return
+    
+    def get_pubkey_prepare_request(self, args: dotdict):
+        if args.path is None:
+            raise ValueError("Missing 'path' argument")
+
+        get_pubkey = RequestGetPubKey()
+        display_value = args.get("display", "False")
+        get_pubkey.display = display_value.lower() == "true"
+        get_pubkey.path.extend(bip32_path_to_list(args.path))
+        message = Request()
+        message.get_pubkey.CopyFrom(get_pubkey)
+
+        assert message.WhichOneof("request") == "get_pubkey"
+        return message.SerializeToString()
+    
+    def get_pubkey_parse_response(self, response):
+        assert response.WhichOneof("response") == "get_pubkey"
+        print(f"pubkey (65): 0x{response.get_pubkey.pubkey}")
+        print(f"chaincode (32): 0x{response.get_pubkey.chaincode}")
+        return
+    
     
 
 class ActionArgumentCompleter(Completer):

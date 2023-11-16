@@ -1,7 +1,7 @@
 #[used]
 #[no_mangle]
 #[link_section = ".app_name"]
-pub static APP_NAME: [u8; 32] = *b"Vanadium Boilerplate App\x00\x00\x00\x00\x00\x00\x00\x00";
+pub static APP_NAME: [u8; 32] = *b"V Boilerplate\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 
 #[used]
 #[no_mangle]
