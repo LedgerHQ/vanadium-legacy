@@ -94,11 +94,7 @@ pub struct EcfpPublicKey {
 pub struct EcfpPrivateKey {
     curve: CxCurve,
     d_len: usize,
-    d: [u8; 32],
-    /// chain code len 
-    cc_len: usize,
-    /// chain code
-    cc: [u8; 32] 
+    d: [u8; 32] 
 }
 
 #[derive(Clone, Copy)]
@@ -539,19 +535,17 @@ pub fn secp256k1_point(data: &[u8; 32]) -> Result<EcfpPublicKey, SdkError> {
 }
 
 impl EcfpPrivateKey {
-    pub fn new(curve: CxCurve, bytes: &[u8; 32], chain_code: &[u8; 32]) -> Self {
+    pub fn new(curve: CxCurve, bytes: &[u8; 32]) -> Self {
         Self {
             curve,
             d_len: 32,
-            d: *bytes,
-            cc_len: 32,
-            cc: *chain_code,
+            d: *bytes
         }
     }
 
     pub fn from_path(curve: CxCurve, path: &[u32]) -> Result<EcfpPrivateKey, SdkError> {
-        let mut privkey = Self::new(curve, &[0; 32], &[0; 32]);
-        derive_node_bip32(curve, path, Some(&mut privkey.d), Some(&mut privkey.cc))?;
+        let mut privkey = Self::new(curve, &[0; 32]);
+        derive_node_bip32(curve, path, Some(&mut privkey.d), None)?;
         Ok(privkey)
     }
 
@@ -563,9 +557,7 @@ impl EcfpPrivateKey {
         let mut privkey = Self {
             curve: self.curve,
             d_len: self.d_len,
-            d: self.d,
-            cc_len: self.cc_len,
-            cc: self.cc
+            d: self.d
         };
         let mut pubkey = EcfpPublicKey {
             curve: self.curve,
@@ -574,10 +566,6 @@ impl EcfpPrivateKey {
         };
         ecfp_generate_keypair(self.curve, &mut pubkey, &mut privkey, true)?;
         Ok(pubkey)
-    }
-
-    pub fn chaincode(&self) -> Result<[u8; 32], SdkError> {
-        Ok(self.cc)
     }
 
     // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?

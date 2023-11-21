@@ -26,10 +26,28 @@ pub fn handle_get_appname<'a>() -> ResponseGetAppName<'a> {
 
 pub fn handle_get_pubkey<'a>(req: &RequestGetPubKey) -> Result<ResponseGetPubKey<'a>> {
     
+
     // Get public key
-    let pkey = vanadium_sdk::crypto::EcfpPrivateKey::from_path(vanadium_sdk::crypto::CxCurve::Secp256k1, req.path.as_slice()).unwrap();
-    let pubkey = pkey.pubkey()
-        .unwrap()
+    //let pkey = vanadium_sdk::crypto::EcfpPrivateKey::from_path(vanadium_sdk::crypto::CxCurve::Secp256k1, req.path.as_slice()).unwrap();
+    //let pubkey = pkey.pubkey()
+    //    .unwrap()
+    //    .as_bytes()
+    //    .iter()
+    //    .map(|byte| format!("{:02x}", byte))
+    //    .collect::<String>();
+
+    let mut pkey_bytes = [0u8; 32];
+    let mut cc_bytes = [0u8; 32];
+    vanadium_sdk::crypto::derive_node_bip32(
+        CxCurve::Secp256k1,
+        req.path.as_slice(),
+        Some(&mut pkey_bytes),
+        Some(&mut cc_bytes),
+    )?;
+    let pkey = vanadium_sdk::crypto::EcfpPrivateKey::new(CxCurve::Secp256k1, &pkey_bytes);
+
+    // Generate corresponding public key
+    let pubkey = vanadium_sdk::crypto::EcfpPublicKey::from_privkey(&pkey).unwrap()
         .as_bytes()
         .iter()
         .map(|byte| format!("{:02x}", byte))
@@ -37,9 +55,7 @@ pub fn handle_get_pubkey<'a>(req: &RequestGetPubKey) -> Result<ResponseGetPubKey
 
 
     // Get chain code
-    let chain_code = pkey.chaincode()
-        .unwrap()
-        .iter()
+    let chain_code = cc_bytes.iter()
         .map(|byte| format!("{:02x}", byte))
         .collect::<String>();
 
