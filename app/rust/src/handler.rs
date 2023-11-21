@@ -109,7 +109,7 @@ pub fn handle_sign_tx<'a>(req: RequestSignTx) -> Result<ResponseSignTx<'a>> {
             .collect::<String>();
 
         
-        let (signature, v) = pkey.sign(CX_RND_RFC6979 | CX_LAST, CxMd::Sha256, &hash)?;
+        let (signature, v) = pkey.ecdsa_sign(CX_RND_RFC6979 | CX_LAST, CxMd::Sha256, &hash)?;
 
         let sig = signature.iter()
             .map(|byte| format!("{:02x}", byte))

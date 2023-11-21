@@ -139,7 +139,7 @@ pub enum CxMd {
 
 pub const CX_RND_TRNG: u32 = 2 << 9;
 pub const CX_RND_RFC6979: u32 = 3 << 9;
-pub const CX_LAST: i32 = 1 << 0;
+pub const CX_LAST: u32 = 1 << 0;
 
 pub const CX_ECSCHNORR_BIP0340: u32 = 0 << 12;
 
@@ -581,7 +581,7 @@ impl EcfpPrivateKey {
     }
 
     // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?
-    pub fn ecdsa_sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<(Vec<u8>, u32), SdkError> {
+    pub fn ecdsa_sign(&self, mode: u32, hash_id: CxMd, hash: &[u8; 32]) -> Result<(Vec<u8>, u32), SdkError> {
         let mut sig = [0u8; 80];
         let sig_len: usize;
         let mut parity: i32 = 0;
@@ -589,7 +589,7 @@ impl EcfpPrivateKey {
         if !unsafe {
             sig_len = ecall_ecdsa_sign(
                 self,
-                mode,
+                mode as i32,
                 hash_id,
                 hash.as_ptr(),
                 sig.as_mut_ptr(),
