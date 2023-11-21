@@ -30,6 +30,7 @@ pub enum SdkError {
     PathDerivation,
     Signature,
     SignatureVerification,
+    TweakError,
     GenericError,
 }
 
@@ -41,6 +42,7 @@ impl fmt::Display for SdkError {
             SdkError::PathDerivation => write!(f, "path derivation"),
             SdkError::Signature => write!(f, "signature"),
             SdkError::SignatureVerification => write!(f, "signature verification"),
+            SdkError::TweakError => write!(f, "tweak error"),
             SdkError::GenericError => write!(f, "generic error"),
         }
     }

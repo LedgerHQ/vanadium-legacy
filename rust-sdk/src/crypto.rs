@@ -2,9 +2,10 @@ use alloc::vec::Vec;
 
 use crate::{
     ecall::{
-        ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32, ecall_ecdsa_sign, ecall_ecdsa_verify,
+        ecall_cx_ecfp_generate_pair, ecall_derive_node_bip32,
+        ecall_ecdsa_sign, ecall_ecdsa_verify, ecall_schnorr_sign, ecall_schnorr_verify,
         ecall_get_master_fingerprint, ecall_get_random_bytes, ecall_hash_final,
-        ecall_multm, ecall_powm, ecall_subm
+        ecall_multm, ecall_powm, ecall_subm, ecall_addm, ecall_cx_ecfp_scalar_mult, ecall_cx_ecfp_add_point
     },
     ecall_hash_update, fatal, SdkError,
 };
@@ -19,19 +20,19 @@ const SECP256K1_GENERATOR: [u8; 65] = [
 ];
 
 // Modulo for secp256k1
-const SECP256K1_P: [u8; 32] = [
+pub const SECP256K1_P: [u8; 32] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0xff, 0xff, 0xfc, 0x2f
 ];
 
 // Curve order for secp256k1
-const SECP256K1_N: [u8; 32] = [
+pub const SECP256K1_N: [u8; 32] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
     0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41
 ];
 
 // (p + 1)/4, used to calculate square roots in secp256k1
-const SECP256K1_SQR_EXPONENT: [u8; 32] = [
+pub const SECP256K1_SQR_EXPONENT: [u8; 32] = [
     0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0xff, 0xff, 0x0c
 ];
@@ -136,8 +137,12 @@ pub enum CxMd {
     Sha3_512 = 13,
 }
 
-pub const CX_RND_RFC6979: i32 = 3 << 9;
+pub const CX_RND_TRNG: u32 = 2 << 9;
+pub const CX_RND_RFC6979: u32 = 3 << 9;
 pub const CX_LAST: i32 = 1 << 0;
+
+pub const CX_ECSCHNORR_BIP0340: u32 = 0 << 12;
+
 
 impl CtxSha256 {
     pub fn new() -> Self {
@@ -418,8 +423,24 @@ impl EcfpPublicKey {
         xonly_key
     }
 
-    pub fn verify(&self, hash: &[u8; 32], sig: &[u8]) -> Result<(), SdkError> {
+    pub fn ecdsa_verify(&self, hash: &[u8; 32], sig: &[u8]) -> Result<(), SdkError> {
         if !unsafe { ecall_ecdsa_verify(self, hash.as_ptr(), sig.as_ptr(), sig.len()) } {
+            Err(SdkError::SignatureVerification)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn schnorr_verify(&self, msg: &[u8], sig: &[u8]) -> Result<(), SdkError> {
+        if !unsafe { ecall_schnorr_verify(
+            self,
+            CX_ECSCHNORR_BIP0340 | CX_RND_TRNG,
+            CxMd::Sha256,
+            msg.as_ptr(),
+            msg.len(),
+            sig.as_ptr(),
+            sig.len(),
+        ) } {
             Err(SdkError::SignatureVerification)
         } else {
             Ok(())
@@ -459,7 +480,7 @@ impl EcfpPublicKey {
                 let prefix = data[0];
                 let x: [u8; 32] = data[1..33].try_into().expect("Cannot fail");
 
-                let mut y = x.clone();
+                let mut y: [u8; 32] = x.clone();
 
                 unsafe {
                     // TODO: handle errors
@@ -489,6 +510,32 @@ impl EcfpPublicKey {
             _ => Err(SdkError::InvalidPublicKey),
         }
     }
+
+    pub fn has_odd_y(&self) -> bool {
+        return self.w[64] & 1 != 0
+    }
+
+    pub fn add_exp_tweak(&mut self, t: &[u8; 32]) -> Result<(), SdkError> {
+        let exp_tweak = secp256k1_point(&t)?;
+        unsafe {
+            if !ecall_cx_ecfp_add_point(CxCurve::Secp256k1, self.w.as_mut_ptr(), self.w.as_ptr(), exp_tweak.w.as_ptr()) {
+                return Err(SdkError::TweakError);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+
+pub fn secp256k1_point(data: &[u8; 32]) -> Result<EcfpPublicKey, SdkError> {
+    let mut point = SECP256K1_GENERATOR;
+    unsafe {
+        if !ecall_cx_ecfp_scalar_mult(CxCurve::Secp256k1, point.as_mut_ptr(), data.as_ptr(), data.len()) {
+            return Err(SdkError::TweakError);
+        }
+    }
+    Ok(EcfpPublicKey::new(CxCurve::Secp256k1, &point))
 }
 
 impl EcfpPrivateKey {
@@ -506,6 +553,10 @@ impl EcfpPrivateKey {
         let mut privkey = Self::new(curve, &[0; 32], &[0; 32]);
         derive_node_bip32(curve, path, Some(&mut privkey.d), Some(&mut privkey.cc))?;
         Ok(privkey)
+    }
+
+    pub fn secp256k1_point(&self) -> Result<EcfpPublicKey, SdkError> {
+        secp256k1_point(&self.d)
     }
 
     pub fn pubkey(&self) -> Result<EcfpPublicKey, SdkError> {
@@ -530,7 +581,7 @@ impl EcfpPrivateKey {
     }
 
     // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?
-    pub fn sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<(Vec<u8>, u32), SdkError> {
+    pub fn ecdsa_sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<(Vec<u8>, u32), SdkError> {
         let mut sig = [0u8; 80];
         let sig_len: usize;
         let mut parity: i32 = 0;
@@ -555,7 +606,56 @@ impl EcfpPrivateKey {
             Ok((sig[0..sig_len].to_vec(), parity as u32 & 1u32))
         }
     }
+
+    // todo: the interface of this might be too bolos-specific
+    pub fn schnorr_sign(&self, msg: &[u8]) -> Result<Vec<u8>, SdkError> {
+        // BIP0340 signatures are always 64 bytes long
+        // no other types of Schnorr signatures are implemented at this time
+        let mut sig = [0u8; 64];
+        let mut sig_len: usize = sig.len();
+
+        unsafe {
+            if ecall_schnorr_sign(
+                self,
+                CX_ECSCHNORR_BIP0340 | CX_RND_TRNG,
+                CxMd::Sha256,
+                    msg.as_ptr(),
+                msg.len(),
+                sig.as_mut_ptr(),
+                &mut sig_len,
+            ) {
+                if sig_len != sig.len() {
+                    return Err(SdkError::GenericError); // This should never happen
+                }
+
+                Ok(sig[0..sig_len].to_vec())
+            } else {
+                Err(SdkError::Signature)
+            }
+        }
+    }
+
+    pub fn add_tweak(&mut self, t: &[u8; 32]) -> Result<(), SdkError> {
+        let pk = secp256k1_point(&self.d)?;
+        unsafe {
+            if pk.has_odd_y() {
+                // odd y, negate the secret key
+                if !ecall_subm(self.d.as_mut_ptr(), SECP256K1_N.as_ptr(), self.d.as_ptr(), SECP256K1_N.as_ptr(), self.d_len) {
+                    return Err(SdkError::TweakError);
+                }
+            }
+
+            // TODO: should fail if t >= SECP256K1_N
+
+            if !ecall_addm(self.d.as_mut_ptr(), self.d.as_ptr(), t.as_ptr(), SECP256K1_N.as_ptr(), 32) {
+                return Err(SdkError::TweakError);
+            }
+        }
+
+        Ok(())
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -642,9 +742,26 @@ mod tests {
         let msg_hash = CtxSha256::new().update(msg.as_bytes()).r#final();
 
         let sig = privkey
-            .sign(CX_RND_RFC6979, CxMd::Sha256, &msg_hash)
+            .ecdsa_sign(CX_RND_RFC6979 as i32, CxMd::Sha256, &msg_hash)
             .unwrap();
 
-        assert_eq!(pubkey.verify(&msg_hash, &sig).is_ok(), true)
+        assert_eq!(pubkey.ecdsa_verify(&msg_hash, &sig).is_ok(), true)
+    }
+
+    #[test]
+    fn test_schnorr_sign_verify() {
+        let key_raw = [42u8; 32];
+        let mut privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &key_raw);
+        let mut pubkey = EcfpPublicKey::new(CxCurve::Secp256k1, &[0u8; 65]);
+        ecfp_generate_keypair(CxCurve::Secp256k1, &mut pubkey, &mut privkey, true).unwrap();
+
+        let msg = "If you don't believe me or don't get it, I don't have time to try to convince you, sorry.";
+        let msg_hash = CtxSha256::new().update(msg.as_bytes()).r#final();
+
+        let sig = privkey
+            .schnorr_sign(&msg_hash)
+            .unwrap();
+
+        assert_eq!(pubkey.schnorr_verify(&msg_hash, &sig).is_ok(), true)
     }
 }

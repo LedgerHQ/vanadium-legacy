@@ -26,7 +26,9 @@ static bool restore_ctx_from_guest(eret_t *eret, const cx_hash_id_t hash_id, gue
         if (!copy_guest_buffer(p_ctx, &guest.ripemd160, sizeof(guest.ripemd160))) {
             return false;
         }
-        cx_ripemd160_init_no_throw(&ctx->ripemd160);
+        if (CX_OK != cx_ripemd160_init_no_throw(&ctx->ripemd160)) {
+            return false;
+        }
         if (guest.ripemd160.initialized) {
             if (guest.ripemd160.blen > sizeof(ctx->ripemd160.block)) {
                 eret->success = false;
@@ -42,7 +44,9 @@ static bool restore_ctx_from_guest(eret_t *eret, const cx_hash_id_t hash_id, gue
         if (!copy_guest_buffer(p_ctx, &guest.sha3, sizeof(guest.sha3))) {
             return false;
         }
-        cx_keccak_init_no_throw(&ctx->sha3, 256);
+        if (CX_OK != cx_keccak_init_no_throw(&ctx->sha3, 256)) {
+            return false;
+        }
         if (guest.sha3.initialized) {
             if (guest.sha3.blen > ctx->sha3.block_size) {
                 eret->success = false;
@@ -58,7 +62,9 @@ static bool restore_ctx_from_guest(eret_t *eret, const cx_hash_id_t hash_id, gue
         if (!copy_guest_buffer(p_ctx, &guest.sha256, sizeof(guest.sha256))) {
             return false;
         }
-        cx_sha256_init_no_throw(&ctx->sha256);
+        if (CX_OK != cx_sha256_init_no_throw(&ctx->sha256)) {
+            return false;
+        }
         if (guest.sha256.initialized) {
             if (guest.sha256.blen > sizeof(ctx->sha256.block)) {
                 eret->success = false;
@@ -74,7 +80,9 @@ static bool restore_ctx_from_guest(eret_t *eret, const cx_hash_id_t hash_id, gue
         if (!copy_guest_buffer(p_ctx, &guest.sha512, sizeof(guest.sha512))) {
             return false;
         }
-        cx_sha512_init_no_throw(&ctx->sha512);
+        if (CX_OK != cx_sha512_init_no_throw(&ctx->sha512)) {
+            return false;
+        }
         if (guest.sha512.initialized) {
             if (guest.sha512.blen > sizeof(ctx->sha512.block)) {
                 eret->success = false;

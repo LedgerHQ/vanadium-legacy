@@ -74,6 +74,22 @@ extern "C" {
         sig: *const u8,
         sig_len: usize,
     ) -> bool;
+    pub fn ecall_schnorr_sign(
+        key: &EcfpPrivateKey,
+        mode: u32,
+        hash_id: CxMd,
+        msg: *const u8,
+        msg_len: usize,
+        sig: *mut u8,
+        sig_len: *mut usize) -> bool;
+    pub fn ecall_schnorr_verify(
+        key: &EcfpPublicKey,
+        mode: u32,
+        hash_id: CxMd,
+        msg: *const u8,
+        msg_len: usize,
+        sig: *const u8,
+        sig_len: usize) -> bool;
     pub fn ecall_get_random_bytes(buffer: *mut u8, size: usize);
     pub fn ecall_hash_update(
         hash_id: CxHashId,
