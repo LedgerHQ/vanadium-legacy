@@ -7,6 +7,9 @@ use error::*;
 
 use alloc::format;
 use ui;
+use alloc::vec::Vec;
+
+use core::convert::TryInto;
 
 
 pub fn handle_get_version<'a>() -> ResponseGetVersion<'a> {
@@ -61,4 +64,65 @@ pub fn handle_get_pubkey<'a>(req: &RequestGetPubKey) -> Result<ResponseGetPubKey
             chaincode: Cow::Owned(chain_code),
         })
     }
+}
+
+pub fn handle_sign_tx<'a>(req: RequestSignTx) -> Result<ResponseSignTx<'a>> {
+
+    if ui::sign_tx_validation(req.address.as_ref(), format!("{}", req.value).as_str()) {
+
+        // Get private key
+        let pkey = vanadium_sdk::crypto::EcfpPrivateKey::from_path(vanadium_sdk::crypto::CxCurve::Secp256k1, req.path.as_slice()).unwrap();
+
+        // Compute Tx hash 
+        let mut buf: Vec<u8> = Vec::new();
+        buf.append(&mut req.nonce.to_be_bytes().to_vec());
+
+        let address = match req.address.as_ref().strip_prefix("0x") {
+            Some(address) => address,
+            None => req.address.as_ref()
+        }; 
+        buf.append(&mut hex::decode(address).unwrap());
+        buf.append(&mut req.value.to_be_bytes().to_vec());
+
+        match req.memo.as_bytes().len() {
+            l if l < 0xFC => buf.append(&mut l.to_le_bytes()[..1].to_vec()),
+            l if l <= u16::MAX.into() => {
+                buf.push(0xFD);
+                buf.append(&mut l.to_le_bytes()[..2].to_vec());
+            },
+            l if l <= u32::MAX.try_into().unwrap() => {
+                buf.push(0xFE);
+                buf.append(&mut l.to_le_bytes()[..4].to_vec());
+            },
+            l if l <= u64::MAX.try_into().unwrap() => {
+                buf.push(0xFF);
+                buf.append(&mut l.to_le_bytes()[..8].to_vec());
+            },
+            _l => return Err(AppError::new("Can't write to varint"))
+        }
+
+        buf.append(&mut req.memo.as_bytes().to_vec());
+
+        let hash = CtxSha3::new().update(buf.as_slice()).r#final();
+        let hash_s= hash.iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+
+        
+        let (signature, v) = pkey.sign(CX_RND_RFC6979 | CX_LAST, CxMd::Sha256, &hash)?;
+
+        let sig = signature.iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+        
+        Ok(ResponseSignTx {
+            hash: Cow::Owned(hash_s),
+            siglen: signature.len() as u32,
+            sig: Cow::Owned(sig),
+            v
+        })
+    }
+    else {
+        Err(AppError::new("Not validated"))
+    } 
 }

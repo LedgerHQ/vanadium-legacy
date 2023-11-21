@@ -137,6 +137,7 @@ pub enum CxMd {
 }
 
 pub const CX_RND_RFC6979: i32 = 3 << 9;
+pub const CX_LAST: i32 = 1 << 0;
 
 impl CtxSha256 {
     pub fn new() -> Self {
@@ -529,12 +530,12 @@ impl EcfpPrivateKey {
     }
 
     // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?
-    pub fn sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<Vec<u8>, SdkError> {
+    pub fn sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<(Vec<u8>, u32), SdkError> {
         let mut sig = [0u8; 80];
         let sig_len: usize;
+        let mut parity: i32 = 0;
 
         if !unsafe {
-            let mut parity: i32 = 0;
             sig_len = ecall_ecdsa_sign(
                 self,
                 mode,
@@ -551,7 +552,7 @@ impl EcfpPrivateKey {
         } {
             Err(SdkError::Signature)
         } else {
-            Ok(sig[0..sig_len].to_vec())
+            Ok((sig[0..sig_len].to_vec(), parity as u32 & 1u32))
         }
     }
 }

@@ -62,10 +62,10 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
             OneOfrequest::get_version(_) => OneOfresponse::get_version(handle_get_version()),
             OneOfrequest::get_appname(_) => OneOfresponse::get_appname(handle_get_appname()),
             OneOfrequest::get_pubkey(getpubkey) => OneOfresponse::get_pubkey(handle_get_pubkey(&getpubkey)?),
+            OneOfrequest::sign_tx(tx) => OneOfresponse::sign_tx(handle_sign_tx(tx)?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };
-
     Ok(response)
 }
 

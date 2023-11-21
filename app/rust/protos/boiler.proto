@@ -30,6 +30,21 @@ message ResponseGetPubKey {
   string chaincode = 2;
 }
 
+message RequestSignTx {
+  repeated uint32 path = 1;
+  uint64 nonce = 2;
+  uint64 value = 3;
+  string address = 4;
+  string memo = 5;
+}
+
+message ResponseSignTx {
+  string hash = 1;
+  uint32 siglen = 2;
+  string sig =  3;
+  uint32 v = 4;
+}
+
 message ResponseError {
   string error_msg = 1;
 };
@@ -39,6 +54,7 @@ message Request {
     RequestGetVersion get_version = 1;
     RequestGetAppName get_appname = 2;
     RequestGetPubKey get_pubkey = 3;
+    RequestSignTx sign_tx = 4;
   }
 }
 
@@ -47,6 +63,7 @@ message Response {
     ResponseGetVersion get_version = 1;
     ResponseGetAppName get_appname = 2;
     ResponseGetPubKey get_pubkey = 3;
-    ResponseError error = 4;
+    ResponseSignTx sign_tx = 4;
+    ResponseError error = 5;
   }
 }

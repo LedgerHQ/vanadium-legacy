@@ -15,7 +15,7 @@ from prompt_toolkit.history import FileHistory
 from argparse import ArgumentParser
 from typing import Optional
 
-from boiler_pb2 import RequestGetVersion, RequestGetAppName, RequestGetPubKey, Request, Response
+from boiler_pb2 import RequestGetVersion, RequestGetAppName, RequestGetPubKey, RequestSignTx, Request, Response
 from util import bip32_path_to_list
 
 # TODO: make a proper package for the stream.py module
@@ -119,14 +119,35 @@ class Client:
         print(f"chaincode (32): 0x{response.get_pubkey.chaincode}")
         return
     
+    def sign_tx_prepare_request(self, args: dotdict):
+        tx = RequestSignTx()
+        tx.path.extend(bip32_path_to_list(args.get("path", "m/44'/1'/0'/0/0")))
+        tx.nonce = 1
+        tx.value = int(args.get("ammount", "666"))
+        tx.address = args.get("to", "0xde0b295669a9fd93d5f28d9ec85e40f4cb697bae")
+        tx.memo = args.get("memo", "For u EthDev")
+        message = Request()
+        message.sign_tx.CopyFrom(tx)
+
+        assert message.WhichOneof("request") == "sign_tx"
+        return message.SerializeToString()
     
+    def sign_tx_parse_response(self, response):
+        assert response.WhichOneof("response") == "sign_tx"
+        print(f"hash: {response.sign_tx.hash}")
+        print(f"len: {response.sign_tx.siglen}")
+        print(f"signature (DER): 0x{response.sign_tx.sig}")
+        print(f"v: 0x{response.sign_tx.v}")
+        return
+
+        
 
 class ActionArgumentCompleter(Completer):
     ACTION_ARGUMENTS = {
         "get_version": [],
         "get_appname": [],
         "get_pubkey": [ "display", "path="],
-        "sign_tx": ["hash="],
+        "sign_tx": ["path", "to", "amount", "memo"],
     }
 
     def get_completions(self, document, complete_event):
