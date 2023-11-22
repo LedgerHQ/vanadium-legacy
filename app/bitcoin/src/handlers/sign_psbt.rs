@@ -71,7 +71,7 @@ fn sign_input_ecdsa<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut Sig
     let privkey = EcfpPrivateKey::from_path(CxCurve::Secp256k1, path)?;
     let pubkey = privkey.pubkey()?;
 
-    let mut signature = privkey.ecdsa_sign(CX_RND_RFC6979 as i32, CxMd::Sha256, sighash.as_ref())?;
+    let (mut signature, _) = privkey.ecdsa_sign(CX_RND_RFC6979, CxMd::Sha256, sighash.as_ref())?;
     signature.push(sighash_type.to_u32() as u8);
 
     Ok(PartialSignature {
