@@ -2,3 +2,8 @@ Cargo.lock
 target/
 lib/risc-v
 lib/x64
+src/message
+client_py/.cli-history
+client_py/boiler_pb2.py
+client_py/dump.log
+client_py/venv

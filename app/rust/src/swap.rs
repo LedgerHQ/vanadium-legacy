@@ -5,7 +5,7 @@ use quick_protobuf::{BytesReader, MessageRead};
 use currency::*;
 use error::*;
 use ledger_swap::ledger_swap::*;
-use message::message::*;
+use message::boiler::*;
 use partner::*;
 use vanadium_sdk::crypto::{get_random_bytes, CtxSha256, CxCurve, EcfpPublicKey};
 use vanadium_sdk::ux::app_loading_start;

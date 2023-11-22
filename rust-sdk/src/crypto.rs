@@ -94,7 +94,7 @@ pub struct EcfpPublicKey {
 pub struct EcfpPrivateKey {
     curve: CxCurve,
     d_len: usize,
-    d: [u8; 32],
+    d: [u8; 32] 
 }
 
 #[derive(Clone, Copy)]
@@ -135,6 +135,7 @@ pub enum CxMd {
 
 pub const CX_RND_TRNG: u32 = 2 << 9;
 pub const CX_RND_RFC6979: u32 = 3 << 9;
+pub const CX_LAST: u32 = 1 << 0;
 
 pub const CX_ECSCHNORR_BIP0340: u32 = 0 << 12;
 
@@ -538,7 +539,7 @@ impl EcfpPrivateKey {
         Self {
             curve,
             d_len: 32,
-            d: *bytes,
+            d: *bytes
         }
     }
 
@@ -556,7 +557,7 @@ impl EcfpPrivateKey {
         let mut privkey = Self {
             curve: self.curve,
             d_len: self.d_len,
-            d: self.d,
+            d: self.d
         };
         let mut pubkey = EcfpPublicKey {
             curve: self.curve,
@@ -568,15 +569,15 @@ impl EcfpPrivateKey {
     }
 
     // todo: the interface of this is too bolos-specific; e.g.: can we get rid of the "mode" argument?
-    pub fn ecdsa_sign(&self, mode: i32, hash_id: CxMd, hash: &[u8; 32]) -> Result<Vec<u8>, SdkError> {
+    pub fn ecdsa_sign(&self, mode: u32, hash_id: CxMd, hash: &[u8; 32]) -> Result<(Vec<u8>, u32), SdkError> {
         let mut sig = [0u8; 80];
         let sig_len: usize;
+        let mut parity: i32 = 0;
 
         if !unsafe {
-            let mut parity: i32 = 0;
             sig_len = ecall_ecdsa_sign(
                 self,
-                mode,
+                mode as i32,
                 hash_id,
                 hash.as_ptr(),
                 sig.as_mut_ptr(),
@@ -590,7 +591,7 @@ impl EcfpPrivateKey {
         } {
             Err(SdkError::Signature)
         } else {
-            Ok(sig[0..sig_len].to_vec())
+            Ok((sig[0..sig_len].to_vec(), parity as u32 & 1u32))
         }
     }
 
@@ -720,7 +721,8 @@ mod tests {
     #[test]
     fn test_ecdsa_sign_verify() {
         let key_raw = [42u8; 32];
-        let mut privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &key_raw);
+        let chain_code = [0u8; 32];
+        let mut privkey = EcfpPrivateKey::new(CxCurve::Secp256k1, &key_raw, &chain_code);
         let mut pubkey = EcfpPublicKey::new(CxCurve::Secp256k1, &[0u8; 65]);
         ecfp_generate_keypair(CxCurve::Secp256k1, &mut pubkey, &mut privkey, true).unwrap();
 

@@ -1,5 +1,5 @@
 use error::Result;
-use message::message::*;
+use message::boiler::*;
 use vanadium_sdk::crypto::{CtxSha256, CxCurve, EcfpPublicKey};
 
 static LEDGER_PUBKEY: &[u8; 65] = &[
