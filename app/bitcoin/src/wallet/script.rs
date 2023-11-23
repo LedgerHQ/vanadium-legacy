@@ -91,17 +91,22 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
         ctx: ScriptContext,
     ) -> Result<Builder, &'static str> {
         let derive = |kp: &KeyPlaceholder| -> Result<ExtendedPubKey, &'static str> {
-            let change_step = if is_change { kp.num2 } else { kp.num1 };
+            match kp {
+                KeyPlaceholder::PlainKey { key_index, num1, num2 } => {
+                    let change_step = if is_change { *num2 } else { *num1 };
 
-            let key_info = key_information
-                .get(kp.key_index as usize)
-                .ok_or("Invalid key index")?;
+                    let key_info = key_information
+                        .get(*key_index as usize)
+                        .ok_or("Invalid key index")?;
 
-            let root_pubkey = ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
+                    let root_pubkey = ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
 
-            root_pubkey
-                .derive_pub(&vec![change_step, address_index])
-                .map_err(|_| "Failed to produce derived key")
+                    root_pubkey
+                        .derive_pub(&vec![change_step, address_index])
+                        .map_err(|_| "Failed to produce derived key")
+                },
+                KeyPlaceholder::Musig { key_indices, num1, num2 } => todo!(), // not implemented
+            }
         };
 
         builder = match self {
@@ -254,7 +259,7 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
             DescriptorTemplate::One => builder.push_opcode(OP_PUSHNUM_1),
             DescriptorTemplate::Pk(k) => {
                 // c:pk_k(key)
-                let desc = DescriptorTemplate::C(Box::new(DescriptorTemplate::Pk_k(*k)));
+                let desc = DescriptorTemplate::C(Box::new(DescriptorTemplate::Pk_k(k.clone())));
                 desc.to_script_inner(key_information, is_change, address_index, builder, ctx)?
             }
             DescriptorTemplate::Pk_k(kp) => {

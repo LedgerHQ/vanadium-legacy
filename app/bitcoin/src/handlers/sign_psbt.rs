@@ -154,10 +154,15 @@ fn find_change_and_addr_index(psbt: &Psbt, wallet_policy: &WalletPolicy, placeho
                     let change_step = der[orig_len];
                     let addr_index = der[orig_len + 1];
 
-                    if placeholder.num1 == change_step {
-                        return Some((false, addr_index));
-                    } else if placeholder.num2 == change_step {
-                        return Some((true, addr_index));
+                    match placeholder {
+                        KeyPlaceholder::PlainKey { key_index, num1, num2 } => {
+                            if *num1 == change_step {
+                                return Some((false, addr_index));
+                            } else if *num2 == change_step {
+                                return Some((true, addr_index));
+                            }
+                        }
+                        KeyPlaceholder::Musig { key_indices, num1, num2 } => todo!(), // not implemented
                     }
                 }
             }
@@ -213,62 +218,62 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
     let master_fingerprint = vanadium_sdk::crypto::get_master_fingerprint()?;
 
     for (placeholder, tapleaf_desc) in wallet_policy.descriptor_template.placeholders() {
-        // TODO: check if key is internal; for now we just trust the fingerprint
+        match placeholder {
+            KeyPlaceholder::PlainKey { key_index, num1, num2 } => {
+                // TODO: check if key is internal; for now we just trust the fingerprint
+                let key_info = wallet_policy.key_information[*key_index as usize].clone();
+                if let Some(key_origin) = key_info.origin_info.as_ref().filter(|x| x.fingerprint == master_fingerprint) {
+                    // for each input, verify if we can match the derivation with the current placeholder
+                    if let Some((is_change, addr_index)) = find_change_and_addr_index(&psbt, &wallet_policy, &placeholder, &key_origin, master_fingerprint) {
+                        let mut path = key_info.origin_info.unwrap().derivation_path;
 
-        let key_info = wallet_policy.key_information[placeholder.key_index as usize].clone();
-        if let Some(key_origin) = key_info.origin_info.as_ref().filter(|x| x.fingerprint == master_fingerprint) {
-            // for each input, verify if we can match the derivation with the current placeholder
-            if let Some((is_change, addr_index)) = find_change_and_addr_index(&psbt, &wallet_policy, &placeholder, &key_origin, master_fingerprint) {
-                let mut path = key_info.origin_info.unwrap().derivation_path;
-    
-                path.push(if !is_change {
-                    placeholder.num1
-                } else {
-                    placeholder.num2
-                });
-                path.push(addr_index);
+                        path.push(if !is_change { *num1 } else { *num2 });
+                        path.push(addr_index);
 
-                for (input_index, input) in psbt.inputs.iter().enumerate() {
-                    if let Some(witness_utxo) = &input.witness_utxo {
-                        // sign all segwit types (including wrapped)
-                        if let Some(redeem_script) = &input.redeem_script {
-                            // check that P2WSH(redeem_script) == witness_utxo.script_pubkey
-                            if witness_utxo.script_pubkey != ScriptBuf::new_p2sh(&redeem_script.script_hash()) {
-                                return Err(AppError::new("witnessUtxo's scriptPubKey does not match redeemScript"));
-                            }
-                        }
-    
-                        match wallet_policy.get_segwit_version() {
-                            Ok(SegwitVersion::SegwitV0) => {
-                                // sign as segwit v0
+                        for (input_index, input) in psbt.inputs.iter().enumerate() {
+                            if let Some(witness_utxo) = &input.witness_utxo {
+                                // sign all segwit types (including wrapped)
+                                if let Some(redeem_script) = &input.redeem_script {
+                                    // check that P2WSH(redeem_script) == witness_utxo.script_pubkey
+                                    if witness_utxo.script_pubkey != ScriptBuf::new_p2sh(&redeem_script.script_hash()) {
+                                        return Err(AppError::new("witnessUtxo's scriptPubKey does not match redeemScript"));
+                                    }
+                                }
+
+                                match wallet_policy.get_segwit_version() {
+                                    Ok(SegwitVersion::SegwitV0) => {
+                                        // sign as segwit v0
+                                        let partial_signature = sign_input_ecdsa(&psbt, input_index, &mut sighash_cache, &path)?;
+                                        partial_signatures.push(partial_signature);
+                                    },
+                                    Ok(SegwitVersion::Taproot) => {
+                                        // TODO currently only handling key path spends (with or without a taptree)
+                                        let taptree_hash = match &wallet_policy.descriptor_template {
+                                            DescriptorTemplate::Tr(_, tree) => {
+                                                tree.as_ref().map(|t| t.get_taptree_hash(&wallet_policy.key_information, is_change, addr_index)).transpose()
+                                            }
+                                            _ => return Err(AppError::new("Unexpected state: should be a Taproot wallet policy")),
+                                        }?;
+
+                                        let leaf_hash = tapleaf_desc
+                                            .map(|desc| desc.get_tapleaf_hash(&wallet_policy.key_information, is_change, addr_index))
+                                            .transpose()?;
+
+                                        let partial_signature = sign_input_schnorr(&psbt, input_index, &mut sighash_cache, &path, taptree_hash, leaf_hash)?;
+                                        partial_signatures.push(partial_signature);
+                                    },
+                                    _ => return Err(AppError::new("Unexpected state: should be SegwitV0 or Taproot")),
+                                }
+                            } else {
+                                // sign as legacy p2pkh or p2sh
                                 let partial_signature = sign_input_ecdsa(&psbt, input_index, &mut sighash_cache, &path)?;
                                 partial_signatures.push(partial_signature);
-                            },
-                            Ok(SegwitVersion::Taproot) => {
-                                // TODO currently only handling key path spends (with or without a taptree)
-                                let taptree_hash = match &wallet_policy.descriptor_template {
-                                    DescriptorTemplate::Tr(_, tree) => {
-                                        tree.as_ref().map(|t| t.get_taptree_hash(&wallet_policy.key_information, is_change, addr_index)).transpose()
-                                    }
-                                    _ => return Err(AppError::new("Unexpected state: should be a Taproot wallet policy")),
-                                }?;
-
-                                let leaf_hash = tapleaf_desc
-                                    .map(|desc| desc.get_tapleaf_hash(&wallet_policy.key_information, is_change, addr_index))
-                                    .transpose()?;
-
-                                let partial_signature = sign_input_schnorr(&psbt, input_index, &mut sighash_cache, &path, taptree_hash, leaf_hash)?;
-                                partial_signatures.push(partial_signature);
-                            },
-                            _ => return Err(AppError::new("Unexpected state: should be SegwitV0 or Taproot")),
+                            }
                         }
-                    } else {
-                        // sign as legacy p2pkh or p2sh
-                        let partial_signature = sign_input_ecdsa(&psbt, input_index, &mut sighash_cache, &path)?;
-                        partial_signatures.push(partial_signature);
                     }
                 }
-            }
+            },
+            KeyPlaceholder::Musig { key_indices, num1, num2 } => todo!(), // not implemented
         }
     }
 
