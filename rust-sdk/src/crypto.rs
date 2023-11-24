@@ -38,6 +38,7 @@ pub const SECP256K1_SQR_EXPONENT: [u8; 32] = [
 ];
 
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct CtxSha256 {
     initialized: bool,
@@ -47,6 +48,7 @@ pub struct CtxSha256 {
     acc: [u8; 8 * 4],
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct CtxSha3 {
     initialized: bool,
@@ -56,6 +58,7 @@ pub struct CtxSha3 {
     acc: [u64; 25],
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct CtxSha512 {
     initialized: bool,
@@ -65,6 +68,7 @@ pub struct CtxSha512 {
     acc: [u8; 8 * 8],
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct CtxRipeMd160 {
     initialized: bool,

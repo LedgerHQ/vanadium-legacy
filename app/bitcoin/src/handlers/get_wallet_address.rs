@@ -65,11 +65,11 @@ pub fn handle_get_wallet_address<'a>(
 
     let script = wallet_policy
         .to_script(req.change, req.address_index)
-        .map_err(|_| AppError::new("Failed to produce script"))?;
+        .map_err(|err| AppError::new(&format!("Failed to produce script: {}", err)))?;
 
     let addr: Address<NetworkChecked> =
         Address::from_script(script.as_script(), bitcoin::Network::Testnet)
-            .map_err(|_| AppError::new("Failed to produce address"))?;
+            .map_err(|err| AppError::new(&format!("Failed to produce address: {}", err)))?;
 
     Ok(ResponseGetWalletAddress {
         address: Cow::Owned(format!("{}", addr)),
@@ -98,5 +98,25 @@ mod tests {
         let resp = handle_get_wallet_address(req).unwrap();
 
         assert_eq!(resp.address, "tb1qzdr7s2sr0dwmkwx033r4nujzk86u0cy6fmzfjk");
+    }
+
+    #[test]
+    fn test_get_wallet_address_musig() {
+        let req = RequestGetWalletAddress {
+            name: "".into(),
+            descriptor_template: "tr(musig(@0,@1)/**)".into(),
+            keys_info: vec![
+                "[f5acc2fd/44'/1'/0']tpubDCwYjpDhUdPGP5rS3wgNg13mTrrjBuG8V9VpWbyptX6TRPbNoZVXsoVUSkCjmQ8jJycjuDKBb9eataSymXakTTaGifxR6kmVsfFehH1ZgJT".into(),
+                "tpubDCwYjpDhUdPGQWG6wG6hkBJuWFZEtrn7j3xwG3i8XcQabcGC53xWZm1hSXrUPFS5UvZ3QhdPSjXWNfWmFGTioARHuG5J7XguEjgg7p8PxAm".into()
+            ],
+            wallet_hmac: Cow::Owned(DUMMY_HMAC.into()),
+            change: false,
+            address_index: 3,
+            display: false,
+        };
+
+        let resp = handle_get_wallet_address(req).unwrap();
+
+        assert_eq!(resp.address, "tb1p7j9azx5xwt5fp3t99wnj4885yfcqynhz645ntflxr9dxr2g8ndnq32xa2m");
     }
 }

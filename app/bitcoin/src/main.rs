@@ -4,10 +4,12 @@
 extern crate alloc;
 extern crate bitcoin;
 extern crate byteorder;
+extern crate digest;
 extern crate hex;
 extern crate hex_literal;
 extern crate nom;
 extern crate quick_protobuf;
+extern crate schnorr_fun;
 extern crate subtle;
 extern crate vanadium_sdk;
 

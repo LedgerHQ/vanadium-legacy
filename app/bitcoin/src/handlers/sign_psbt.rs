@@ -1,6 +1,6 @@
 use alloc::{borrow::Cow, format, vec, vec::Vec};
 use subtle::ConstantTimeEq;
-use vanadium_sdk::crypto::{CxCurve, CxMd, EcfpPrivateKey, CX_RND_RFC6979, EcfpPublicKey};
+use vanadium_sdk::crypto::{CxCurve, CxMd, EcfpPrivateKey, CX_RND_RFC6979};
 
 use crate::{
     message::message::{PartialSignature, RequestSignPsbt, ResponseSignPsbt},
