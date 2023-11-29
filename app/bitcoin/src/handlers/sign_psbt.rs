@@ -134,6 +134,11 @@ fn sign_input_schnorr<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut S
 
 
 fn find_change_and_addr_index(psbt: &Psbt, wallet_policy: &WalletPolicy, placeholder: &KeyPlaceholder, key_origin: &KeyOrigin, master_fpr: u32) -> Option<(bool, u32)> {
+    let (placeholder_num1, placeholder_num2) = match placeholder {
+        KeyPlaceholder::PlainKey { key_index: _, num1, num2 } => (*num1, *num2),
+        KeyPlaceholder::Musig { key_indices: _, num1, num2 } => (*num1, *num2),
+    };
+
     for input in psbt.inputs.iter() {
         let keys_and_origins: Vec<&(Fingerprint, DerivationPath)> = if wallet_policy.get_segwit_version() == Ok(SegwitVersion::Taproot) {
             input.tap_key_origins.iter().map(|(_, (_, x))| x).collect()
@@ -154,15 +159,10 @@ fn find_change_and_addr_index(psbt: &Psbt, wallet_policy: &WalletPolicy, placeho
                     let change_step = der[orig_len];
                     let addr_index = der[orig_len + 1];
 
-                    match placeholder {
-                        KeyPlaceholder::PlainKey { key_index, num1, num2 } => {
-                            if *num1 == change_step {
-                                return Some((false, addr_index));
-                            } else if *num2 == change_step {
-                                return Some((true, addr_index));
-                            }
-                        }
-                        KeyPlaceholder::Musig { key_indices, num1, num2 } => todo!(), // not implemented
+                    if change_step == placeholder_num1 {
+                        return Some((false, addr_index));
+                    } else if change_step == placeholder_num2 {
+                        return Some((true, addr_index));
                     }
                 }
             }
@@ -247,7 +247,6 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt) -> Result<ResponseSignPsbt<'a>
                                         partial_signatures.push(partial_signature);
                                     },
                                     Ok(SegwitVersion::Taproot) => {
-                                        // TODO currently only handling key path spends (with or without a taptree)
                                         let taptree_hash = match &wallet_policy.descriptor_template {
                                             DescriptorTemplate::Tr(_, tree) => {
                                                 tree.as_ref().map(|t| t.get_taptree_hash(&wallet_policy.key_information, is_change, addr_index)).transpose()
