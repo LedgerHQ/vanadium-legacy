@@ -18,7 +18,7 @@ fn new_tagged_hash(tag: &[u8]) -> CtxSha256 {
     hash_context
 }
 
-fn tagged_hash(tag: &[u8], data: &[u8], data2: Option<&[u8]>) -> [u8; 32] {
+pub fn tagged_hash(tag: &[u8], data: &[u8], data2: Option<&[u8]>) -> [u8; 32] {
     let mut hash_context = new_tagged_hash(tag);
     let mut out: [u8; 32] = [0; 32];
     

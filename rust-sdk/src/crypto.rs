@@ -547,6 +547,10 @@ impl EcfpPrivateKey {
         }
     }
 
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.d
+    }
+
     pub fn from_path(curve: CxCurve, path: &[u32]) -> Result<EcfpPrivateKey, SdkError> {
         let mut privkey = Self::new(curve, &[0; 32]);
         derive_node_bip32(curve, path, Some(&mut privkey.d), None)?;

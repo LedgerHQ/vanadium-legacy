@@ -388,6 +388,7 @@ impl<'a> MessageWrite for RequestSignPsbt<'a> {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct PartialSignature<'a> {
+    pub input_index: u32,
     pub signature: Cow<'a, [u8]>,
     pub public_key: Cow<'a, [u8]>,
     pub leaf_hash: Cow<'a, [u8]>,
@@ -398,9 +399,10 @@ impl<'a> MessageRead<'a> for PartialSignature<'a> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.signature = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(18) => msg.public_key = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(26) => msg.leaf_hash = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(8) => msg.input_index = r.read_uint32(bytes)?,
+                Ok(18) => msg.signature = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.public_key = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(34) => msg.leaf_hash = r.read_bytes(bytes).map(Cow::Borrowed)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -412,15 +414,113 @@ impl<'a> MessageRead<'a> for PartialSignature<'a> {
 impl<'a> MessageWrite for PartialSignature<'a> {
     fn get_size(&self) -> usize {
         0
+        + if self.input_index == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.input_index) as u64) }
         + if self.signature == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.signature).len()) }
         + if self.public_key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.public_key).len()) }
         + if self.leaf_hash == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.leaf_hash).len()) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
-        if self.signature != Cow::Borrowed(b"") { w.write_with_tag(10, |w| w.write_bytes(&**&self.signature))?; }
-        if self.public_key != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.public_key))?; }
-        if self.leaf_hash != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.leaf_hash))?; }
+        if self.input_index != 0u32 { w.write_with_tag(8, |w| w.write_uint32(*&self.input_index))?; }
+        if self.signature != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.signature))?; }
+        if self.public_key != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.public_key))?; }
+        if self.leaf_hash != Cow::Borrowed(b"") { w.write_with_tag(34, |w| w.write_bytes(&**&self.leaf_hash))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct MusigPublicNonce<'a> {
+    pub input_index: u32,
+    pub pubnonce: Cow<'a, [u8]>,
+    pub participant_public_key: Cow<'a, [u8]>,
+    pub xonly_key: Cow<'a, [u8]>,
+    pub leaf_hash: Cow<'a, [u8]>,
+}
+
+impl<'a> MessageRead<'a> for MusigPublicNonce<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.input_index = r.read_uint32(bytes)?,
+                Ok(18) => msg.pubnonce = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.participant_public_key = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(34) => msg.xonly_key = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(42) => msg.leaf_hash = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for MusigPublicNonce<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.input_index == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.input_index) as u64) }
+        + if self.pubnonce == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.pubnonce).len()) }
+        + if self.participant_public_key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.participant_public_key).len()) }
+        + if self.xonly_key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.xonly_key).len()) }
+        + if self.leaf_hash == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.leaf_hash).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.input_index != 0u32 { w.write_with_tag(8, |w| w.write_uint32(*&self.input_index))?; }
+        if self.pubnonce != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.pubnonce))?; }
+        if self.participant_public_key != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.participant_public_key))?; }
+        if self.xonly_key != Cow::Borrowed(b"") { w.write_with_tag(34, |w| w.write_bytes(&**&self.xonly_key))?; }
+        if self.leaf_hash != Cow::Borrowed(b"") { w.write_with_tag(42, |w| w.write_bytes(&**&self.leaf_hash))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct MusigPartialSignature<'a> {
+    pub input_index: u32,
+    pub signature: Cow<'a, [u8]>,
+    pub participant_public_key: Cow<'a, [u8]>,
+    pub xonly_key: Cow<'a, [u8]>,
+    pub leaf_hash: Cow<'a, [u8]>,
+}
+
+impl<'a> MessageRead<'a> for MusigPartialSignature<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.input_index = r.read_uint32(bytes)?,
+                Ok(18) => msg.signature = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.participant_public_key = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(34) => msg.xonly_key = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(42) => msg.leaf_hash = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for MusigPartialSignature<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.input_index == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.input_index) as u64) }
+        + if self.signature == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.signature).len()) }
+        + if self.participant_public_key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.participant_public_key).len()) }
+        + if self.xonly_key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.xonly_key).len()) }
+        + if self.leaf_hash == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.leaf_hash).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.input_index != 0u32 { w.write_with_tag(8, |w| w.write_uint32(*&self.input_index))?; }
+        if self.signature != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.signature))?; }
+        if self.participant_public_key != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.participant_public_key))?; }
+        if self.xonly_key != Cow::Borrowed(b"") { w.write_with_tag(34, |w| w.write_bytes(&**&self.xonly_key))?; }
+        if self.leaf_hash != Cow::Borrowed(b"") { w.write_with_tag(42, |w| w.write_bytes(&**&self.leaf_hash))?; }
         Ok(())
     }
 }
@@ -429,6 +529,8 @@ impl<'a> MessageWrite for PartialSignature<'a> {
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct ResponseSignPsbt<'a> {
     pub partial_signatures: Vec<PartialSignature<'a>>,
+    pub musig_public_nonces: Vec<MusigPublicNonce<'a>>,
+    pub musig_partial_signatures: Vec<MusigPartialSignature<'a>>,
 }
 
 impl<'a> MessageRead<'a> for ResponseSignPsbt<'a> {
@@ -437,6 +539,8 @@ impl<'a> MessageRead<'a> for ResponseSignPsbt<'a> {
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(10) => msg.partial_signatures.push(r.read_message::<PartialSignature>(bytes)?),
+                Ok(18) => msg.musig_public_nonces.push(r.read_message::<MusigPublicNonce>(bytes)?),
+                Ok(26) => msg.musig_partial_signatures.push(r.read_message::<MusigPartialSignature>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -449,10 +553,14 @@ impl<'a> MessageWrite for ResponseSignPsbt<'a> {
     fn get_size(&self) -> usize {
         0
         + self.partial_signatures.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
+        + self.musig_public_nonces.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
+        + self.musig_partial_signatures.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         for s in &self.partial_signatures { w.write_with_tag(10, |w| w.write_message(s))?; }
+        for s in &self.musig_public_nonces { w.write_with_tag(18, |w| w.write_message(s))?; }
+        for s in &self.musig_partial_signatures { w.write_with_tag(26, |w| w.write_message(s))?; }
         Ok(())
     }
 }

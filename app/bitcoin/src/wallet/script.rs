@@ -1,9 +1,6 @@
-use core::convert::TryInto;
 use core::str::FromStr;
 
 use alloc::{boxed::Box, vec, vec::Vec};
-
-use hex_literal::hex;
 
 use bitcoin::hashes::Hash;
 use bitcoin::opcodes::{all::*, OP_0};
@@ -28,9 +25,6 @@ use crate::{
 
 const MAX_PUBKEYS_PER_MULTISIG: usize = 20;
 const MAX_PUBKEYS_PER_MULTI_A: usize = 999;
-
-// by convention, chaincode for the aggregate key obtained by musig() expressions in descriptors.
-const MUSIG_AGGR_CHAINCODE: [u8; 32] = hex!("868087ca02a6f974c4598924c36b57762d32cb45717167e300622c7167e38965");
 
 pub trait ToScript {
     fn to_script(&self, is_change: bool, address_index: u32) -> Result<ScriptBuf, &'static str>;
@@ -101,7 +95,7 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
         ctx: ScriptContext,
     ) -> Result<Builder, &'static str> {
         let derive = |kp: &KeyPlaceholder| -> Result<ExtendedPubKey, &'static str> {
-            let root_pubkey = match kp {
+            let root_pubkey: ExtendedPubKey = match kp {
                 KeyPlaceholder::PlainKey { key_index, num1: _, num2: _ } => {
                     let key_info = key_information
                         .get(*key_index as usize)
@@ -115,8 +109,7 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                         return Err("musig is only allowed in taproot")
                     }
 
-                    // TODO: care need to be taken with deterministic nonces
-                    let musig = new_with_deterministic_nonces::<MySha256>();
+                    let musig = schnorr_fun::musig::new_without_nonce_generation::<MySha256>();
 
                     let root_pubkeys = key_indices.iter()
                         .map(|k| {
@@ -139,12 +132,12 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
                         .map_err(|_| "Failed to generate aggregate pubkey")?;
 
                     ExtendedPubKey {
-                        network: 0x043587CFu32,
+                        network: 0x043587CFu32, // TODO: support other networks
                         depth: 0,
                         parent_fingerprint: [0u8; 4],
                         child_number: 0,
                         public_key: agg_key,
-                        chain_code: MUSIG_AGGR_CHAINCODE,
+                        chain_code: crate::wallet::musig::MUSIG_AGGR_CHAINCODE,
                     }
                 },
             };
