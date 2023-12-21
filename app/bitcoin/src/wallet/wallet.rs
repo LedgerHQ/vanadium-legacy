@@ -32,7 +32,7 @@ use vanadium_sdk::crypto::CtxSha256;
 use super::merkle::MerkleTree;
 use crate::constants::{BIP44_COIN_TYPE, MAX_BIP44_ACCOUNT_RECOMMENDED};
 
-const HARDENED_INDEX: u32 = 0x80000000u32;
+pub const HARDENED_INDEX: u32 = 0x80000000u32;
 
 const MAX_OLDER_AFTER: u32 = 2147483647; // maximum allowed in older/after
 
