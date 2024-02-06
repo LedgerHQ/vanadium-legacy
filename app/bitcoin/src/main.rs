@@ -32,6 +32,9 @@ mod ui;
 mod version;
 mod wallet;
 
+#[cfg(test)]
+mod test_utils;
+
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
 use alloc::vec;
