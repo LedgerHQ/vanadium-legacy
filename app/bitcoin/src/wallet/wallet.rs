@@ -64,7 +64,13 @@ pub enum KeyPlaceholder {
     },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl KeyPlaceholder {
+    pub fn is_musig(&self) -> bool {
+        return matches!(self, KeyPlaceholder::Musig { key_indices, num1, num2 })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(non_camel_case_types)]
 pub enum DescriptorTemplate {
     Sh(Box<DescriptorTemplate>),
@@ -251,7 +257,7 @@ impl DescriptorTemplate {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TapTree {
     Script(Box<DescriptorTemplate>),
     Branch(Box<TapTree>, Box<TapTree>),
@@ -820,6 +826,7 @@ impl FromStr for DescriptorTemplate {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct WalletPolicy {
     pub name: String,
     pub descriptor_template: DescriptorTemplate,

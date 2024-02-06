@@ -11,7 +11,7 @@ use schnorr_fun::{musig::{new_with_deterministic_nonces, Nonce}, fun::{Point, Sc
 use crate::{
     message::message::{PartialSignature, RequestSignPsbt, ResponseSignPsbt, MusigPublicNonce, MusigPartialSignature},
     wallet::{WalletPolicy, SegwitVersion, KeyOrigin, KeyPlaceholder, DescriptorTemplate, MySha256, ExtendedPubKey, musig::get_musig_bip32_tweaks},
-    taproot::{TapTweak, GetTapTreeHash, GetTapLeafHash, tagged_hash, BIP0341_TAPTWEAK_TAG}, state::{AppState, MusigSession},
+    taproot::{compute_taproot_sighash, tagged_hash, GetTapLeafHash, GetTapTreeHash, TapTweak, BIP0341_TAPTWEAK_TAG}, state::{AppState, MusigSession},
 };
 
 #[cfg(not(test))]
@@ -88,32 +88,6 @@ fn sign_input_ecdsa<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut Sig
     })
 }
 
-fn compute_taproot_sighash(
-    psbt: &Psbt,
-    input_index: usize,
-    sighash_cache: &mut SighashCache<Transaction>,
-    leaf_hash: Option<[u8; 32]>,
-    sighash_type: TapSighashType
-) -> Result<TapSighash> {
-    let prevouts = psbt.inputs.iter()
-        .map(|input| input.witness_utxo.clone().ok_or(AppError::new("Missing witness utxo")))
-        .collect::<Result<Vec<TxOut>>>()?;
-
-    if let Some(leaf_hash_bytes) = leaf_hash {
-        sighash_cache.taproot_script_spend_signature_hash(
-            input_index,
-            &bitcoin::sighash::Prevouts::All(&prevouts),
-            TapLeafHash::from_byte_array(leaf_hash_bytes),
-            sighash_type
-        ).map_err(|_| AppError::new("Error computing sighash"))
-    } else {
-        sighash_cache.taproot_key_spend_signature_hash(
-            input_index,
-            &bitcoin::sighash::Prevouts::All(&prevouts),
-            sighash_type
-        ).map_err(|_| AppError::new("Error computing sighash"))
-    }
-}
 
 fn sign_input_schnorr<'a>(psbt: &Psbt, input_index: usize, sighash_cache: &mut SighashCache<Transaction>, path: &[u32], taptree_hash: Option<[u8; 32]>, leaf_hash: Option<[u8; 32]>) -> Result<PartialSignature<'a>> {
     let sighash_type = TapSighashType::Default; // TODO: only DEFAULT is supported for now
@@ -465,7 +439,7 @@ pub fn handle_sign_psbt<'a>(req: RequestSignPsbt, state: &'a mut AppState) -> Re
 
                                 let session = musig.start_sign_session(&agg_key_xonly, nonces, message);
 
-
+                                
                                 let partial_sig = musig.sign(&agg_key_xonly, &session, my_key_index_in_musig as usize, &my_keypair, musig_session.nonce_keypair);
 
                                 musig_partial_signatures.push(MusigPartialSignature {

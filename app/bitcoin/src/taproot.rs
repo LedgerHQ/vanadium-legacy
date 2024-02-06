@@ -1,7 +1,7 @@
-use bitcoin::{VarInt, consensus::encode};
+use bitcoin::{consensus::encode, hashes::Hash, sighash::SighashCache, Psbt, TapLeafHash, TapSighash, TapSighashType, Transaction, TxOut, VarInt};
 use vanadium_sdk::crypto::{EcfpPrivateKey, CtxSha256, EcfpPublicKey, secp256k1_point};
 
-use crate::{error::AppError, wallet::{TapTree, script::{ToScriptWithKeyInfo, ScriptContext}, KeyInformation, DescriptorTemplate}};
+use crate::{error::{AppError, Result}, wallet::{TapTree, script::{ToScriptWithKeyInfo, ScriptContext}, KeyInformation, DescriptorTemplate}};
 
 pub const BIP0341_TAPTWEAK_TAG: &[u8; 8] = b"TapTweak";
 pub const BIP0341_TAPBRANCH_TAG: &[u8; 9] = b"TapBranch";
@@ -35,11 +35,11 @@ pub fn tagged_hash(tag: &[u8], data: &[u8], data2: Option<&[u8]>) -> [u8; 32] {
 
 
 pub trait TapTweak {
-    fn taptweak(&mut self, h: &[u8]) -> Result<(), AppError>;
+    fn taptweak(&mut self, h: &[u8]) -> Result<()>;
 }
 
 impl TapTweak for EcfpPrivateKey {
-    fn taptweak(&mut self, h: &[u8]) -> Result<(), AppError> {
+    fn taptweak(&mut self, h: &[u8]) -> Result<()> {
         let pk = self.secp256k1_point()?;
 
         let t = tagged_hash(BIP0341_TAPTWEAK_TAG, &pk.as_bytes_xonly(), Some(h));
@@ -50,7 +50,7 @@ impl TapTweak for EcfpPrivateKey {
 }
 
 impl TapTweak for EcfpPublicKey {
-    fn taptweak(&mut self, h: &[u8]) -> Result<(), AppError> {
+    fn taptweak(&mut self, h: &[u8]) -> Result<()> {
         // TODO: should this fail if it has odd y? Or coerce to even y automatically?
 
         let t = tagged_hash(BIP0341_TAPTWEAK_TAG, &self.as_bytes_xonly(), Some(h));
@@ -62,11 +62,11 @@ impl TapTweak for EcfpPublicKey {
 }
 
 pub trait GetTapTreeHash {
-    fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError>;
+    fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32]>;
 }
 
 impl GetTapTreeHash for TapTree {
-    fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError> {
+    fn get_taptree_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32]> {
         match self {
             TapTree::Script(leaf_desc) => leaf_desc.get_tapleaf_hash(key_information, is_change, address_index),
             TapTree::Branch(l, r) => {
@@ -83,17 +83,45 @@ impl GetTapTreeHash for TapTree {
 }
 
 pub trait GetTapLeafHash {
-    fn get_tapleaf_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError>;
+    fn get_tapleaf_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32]>;
 }
 
 impl GetTapLeafHash for DescriptorTemplate {
-    fn get_tapleaf_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32], AppError> {
+    fn get_tapleaf_hash(&self, key_information: &[KeyInformation], is_change: bool, address_index: u32) -> Result<[u8; 32]> {
         let mut ctx = new_tagged_hash(BIP0341_TAPLEAF_TAG);
         ctx.update(&[0xC0u8]); // leaf version
         let leaf_script = self.to_script(key_information, is_change, address_index, ScriptContext::Tr)?;
         ctx.update(&encode::serialize(&VarInt(leaf_script.len() as u64)));
         ctx.update(&leaf_script.to_bytes());
         Ok(ctx.r#final())
+    }
+}
+
+
+pub fn compute_taproot_sighash(
+    psbt: &Psbt,
+    input_index: usize,
+    sighash_cache: &mut SighashCache<Transaction>,
+    leaf_hash: Option<[u8; 32]>,
+    sighash_type: TapSighashType
+) -> Result<TapSighash> {
+    let prevouts = psbt.inputs.iter()
+        .map(|input| input.witness_utxo.clone().ok_or(AppError::new("Missing witness utxo")))
+        .collect::<Result<Vec<TxOut>>>()?;
+
+    if let Some(leaf_hash_bytes) = leaf_hash {
+        sighash_cache.taproot_script_spend_signature_hash(
+            input_index,
+            &bitcoin::sighash::Prevouts::All(&prevouts),
+            TapLeafHash::from_byte_array(leaf_hash_bytes),
+            sighash_type
+        ).map_err(|_| AppError::new("Error computing sighash"))
+    } else {
+        sighash_cache.taproot_key_spend_signature_hash(
+            input_index,
+            &bitcoin::sighash::Prevouts::All(&prevouts),
+            sighash_type
+        ).map_err(|_| AppError::new("Error computing sighash"))
     }
 }
 
