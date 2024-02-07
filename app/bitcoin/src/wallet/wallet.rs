@@ -292,18 +292,18 @@ impl<'a> Iterator for TapleavesIter<'a> {
 
 impl KeyInformation {
     pub fn to_string(&self) -> String {
-        match &self.origin_info {
-            Some(origin_info) => {
-                let path = origin_info
-                    .derivation_path
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<String>>()
-                    .join("/");
+        if let Some(origin_info) = &self.origin_info {
+            let path = origin_info.derivation_path.iter().map(|&step| {
+                if step >= HARDENED_INDEX {
+                    format!("{}'", step - HARDENED_INDEX)
+                } else {
+                    step.to_string()
+                }
+            }).collect::<Vec<_>>().join("/");
 
-                format!("[{}]{}/{}", origin_info.fingerprint, path, self.pubkey)
-            }
-            None => self.pubkey.clone(),
+            format!("[{:08x}/{}]{}", origin_info.fingerprint, path, self.pubkey)
+        } else {
+            self.pubkey.clone()  // no key origin information
         }
     }
 }
