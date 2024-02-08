@@ -4,10 +4,13 @@
 extern crate alloc;
 extern crate bitcoin;
 extern crate byteorder;
+extern crate digest;
 extern crate hex;
 extern crate hex_literal;
 extern crate nom;
 extern crate quick_protobuf;
+extern crate rand_chacha;
+extern crate schnorr_fun;
 extern crate subtle;
 extern crate vanadium_sdk;
 
@@ -23,10 +26,14 @@ mod crypto;
 mod error;
 mod handlers;
 mod message;
+mod state;
 mod taproot;
 mod ui;
 mod version;
 mod wallet;
+
+#[cfg(test)]
+mod test_utils;
 
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
@@ -39,6 +46,7 @@ use message::message::mod_Request::OneOfrequest;
 use message::message::mod_Response::OneOfresponse;
 use message::message::*;
 
+use state::AppState;
 #[cfg(target_arch = "riscv32")]
 use vanadium_sdk::fatal;
 
@@ -58,7 +66,7 @@ impl From<&'static str> for ResponseError<'_> {
     }
 }
 
-fn handle_req_(buffer: &[u8]) -> Result<Response> {
+fn handle_req_<'a>(buffer: &'a [u8], state: &'a mut AppState) -> Result<Response<'a>> {
     let pb_bytes = buffer.to_vec();
     let mut reader = BytesReader::from_bytes(&pb_bytes);
     let request: Request = Request::from_reader(&mut reader, &pb_bytes)?;
@@ -78,7 +86,7 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
             OneOfrequest::get_wallet_address(req) => {
                 OneOfresponse::get_wallet_address(handle_get_wallet_address(req)?)
             }
-            OneOfrequest::sign_psbt(req) => OneOfresponse::sign_psbt(handle_sign_psbt(req)?),
+            OneOfrequest::sign_psbt(req) => OneOfresponse::sign_psbt(handle_sign_psbt(req, state)?),
             OneOfrequest::None => OneOfresponse::error("request unset".into()),
         },
     };
@@ -86,10 +94,10 @@ fn handle_req_(buffer: &[u8]) -> Result<Response> {
     Ok(response)
 }
 
-fn handle_req(buffer: &[u8]) -> Vec<u8> {
+fn handle_req(buffer: &[u8], state: &mut AppState) -> Vec<u8> {
     let error_msg: String;
 
-    let response = match handle_req_(buffer) {
+    let response = match handle_req_(buffer, state) {
         Ok(response) => response,
         Err(error) => {
             error_msg = error.to_string();
@@ -131,13 +139,15 @@ pub fn _start(_argc: isize, _argv: *const *const u8) -> isize {
 pub fn main(_: isize, _: *const *const u8) -> isize {
     version::setup_app();
 
+    let mut state = AppState::new();
+
     vanadium_sdk::ux::ux_idle();
     loop {
         let buffer = comm::receive_message().unwrap(); // TODO: what to do on error?
 
         vanadium_sdk::ux::app_loading_start("Handling request...\x00");
 
-        let result = handle_req(&buffer);
+        let result = handle_req(&buffer, &mut state);
 
         vanadium_sdk::ux::app_loading_stop();
         vanadium_sdk::ux::ux_idle();

@@ -19,7 +19,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take, take_while_m_n},
     character::complete::{alpha1, char, digit1},
-    combinator::{all_consuming, cut, map, map_res, opt, verify},
+    combinator::{all_consuming, cut, map, map_res, opt, verify, flat_map},
     multi::{many0, many_m_n, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     Finish, IResult,
@@ -32,7 +32,7 @@ use vanadium_sdk::crypto::CtxSha256;
 use super::merkle::MerkleTree;
 use crate::constants::{BIP44_COIN_TYPE, MAX_BIP44_ACCOUNT_RECOMMENDED};
 
-const HARDENED_INDEX: u32 = 0x80000000u32;
+pub const HARDENED_INDEX: u32 = 0x80000000u32;
 
 const MAX_OLDER_AFTER: u32 = 2147483647; // maximum allowed in older/after
 
@@ -50,14 +50,27 @@ pub struct KeyInformation {
     pub origin_info: Option<KeyOrigin>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct KeyPlaceholder {
-    pub key_index: u32,
-    pub num1: u32,
-    pub num2: u32,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum KeyPlaceholder {
+    PlainKey {
+        key_index: u32,
+        num1: u32,
+        num2: u32,
+    },
+    Musig {
+        key_indices: Vec<u32>,
+        num1: u32,
+        num2: u32,
+    },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl KeyPlaceholder {
+    pub fn is_musig(&self) -> bool {
+        return matches!(self, KeyPlaceholder::Musig { key_indices, num1, num2 })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(non_camel_case_types)]
 pub enum DescriptorTemplate {
     Sh(Box<DescriptorTemplate>),
@@ -244,7 +257,7 @@ impl DescriptorTemplate {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TapTree {
     Script(Box<DescriptorTemplate>),
     Branch(Box<TapTree>, Box<TapTree>),
@@ -285,18 +298,18 @@ impl<'a> Iterator for TapleavesIter<'a> {
 
 impl KeyInformation {
     pub fn to_string(&self) -> String {
-        match &self.origin_info {
-            Some(origin_info) => {
-                let path = origin_info
-                    .derivation_path
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<String>>()
-                    .join("/");
+        if let Some(origin_info) = &self.origin_info {
+            let path = origin_info.derivation_path.iter().map(|&step| {
+                if step >= HARDENED_INDEX {
+                    format!("{}'", step - HARDENED_INDEX)
+                } else {
+                    step.to_string()
+                }
+            }).collect::<Vec<_>>().join("/");
 
-                format!("[{}]{}/{}", origin_info.fingerprint, path, self.pubkey)
-            }
-            None => self.pubkey.clone(),
+            format!("[{:08x}/{}]{}", origin_info.fingerprint, path, self.pubkey)
+        } else {
+            self.pubkey.clone()  // no key origin information
         }
     }
 }
@@ -386,38 +399,61 @@ fn parse_extended_public_key(input: &str) -> IResult<&str, String> {
     )(input)
 }
 
-fn parse_key_placeholder(input: &str) -> IResult<&str, KeyPlaceholder> {
-    let (input, key_index) = delimited(char('@'), parse_number_up_to(u32::MAX), char('/'))(input)?;
-
-    // "**"
-    let parse_double_star = map(tag::<&str, &str, nom::error::Error<&str>>("**"), |_| {
-        (0u32, 1u32)
-    });
-
-    // "<NUM;NUM>/*"
+// Function to parse the "/<num1;num2>/*" or "/**" part
+fn parse_nums(input: &str) -> IResult<&str, (u32, u32)> {
+    let parse_double_star = map(tag("**"), |_| (0u32, 1u32));
     let parse_num_pair = map(
         delimited(
             char('<'),
             tuple((
-                parse_derivation_step_number, // TODO: we only want to accept unhardened
+                parse_number_up_to(HARDENED_INDEX - 1),
                 char(';'),
-                parse_derivation_step_number,
+                parse_number_up_to(HARDENED_INDEX - 1),
             )),
             tag(">/*"),
         ),
         |(num1, _, num2)| (num1, num2),
     );
 
-    let (input, (num1, num2)) = alt((parse_double_star, parse_num_pair))(input)?;
+    // Parse either "/<num1;num2>/*" or "/**"
+    preceded(
+        char('/'),
+        nom::branch::alt((parse_num_pair, parse_double_star))
+    )(input)
+    .map(|(next_input, nums)| (next_input, nums))
+}
 
-    Ok((
-        input,
-        KeyPlaceholder {
+fn parse_key_placeholder(input: &str) -> IResult<&str, KeyPlaceholder> {
+    let parse_plain_key = map(
+        tuple((preceded(char('@'), parse_number_up_to(u32::MAX)), parse_nums)),
+        |(key_index, (num1, num2))| KeyPlaceholder::PlainKey {
             key_index,
             num1,
             num2,
         },
-    ))
+    );
+
+    let parse_musig = map(
+        tuple((
+            delimited(
+                tag("musig("),
+                nom::multi::separated_list1(
+                    tag(","),
+                    preceded(char('@'), parse_number_up_to(u32::MAX)),
+                ),
+                tag(")"),
+            ),
+            parse_nums,
+        )),
+        |(key_indices, (num1, num2))| KeyPlaceholder::Musig {
+            key_indices,
+            num1,
+            num2,
+        },
+    );
+
+    // Attempt to parse as Musig first, then as PlainKey
+    nom::branch::alt((parse_musig, parse_plain_key))(input)
 }
 
 fn parse_descriptor(input: &str) -> IResult<&str, DescriptorTemplate> {
@@ -790,6 +826,7 @@ impl FromStr for DescriptorTemplate {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct WalletPolicy {
     pub name: String,
     pub descriptor_template: DescriptorTemplate,
@@ -922,7 +959,7 @@ impl WalletPolicy {
 
         // checks if a key placeholder is canonical
         fn check_kp(kp: &KeyPlaceholder) -> bool {
-            kp.key_index == 0 && kp.num1 == 0 && kp.num2 == 1
+            *kp == KeyPlaceholder::PlainKey { key_index: 0, num1: 0, num2: 1 }
         }
 
         // checks if a derivation path is canonical according to the BIP-44 purpose
@@ -995,19 +1032,34 @@ impl ToDescriptor for DescriptorTemplate {
                       is_change: bool,
                       address_index: u32|
          -> Result<String, &'static str> {
-            let key_info = key_information
-                .get(key_placeholder.key_index as usize)
-                .ok_or("Invalid key index")
-                .map(|key_info| key_info.to_string());
+            match key_placeholder {
+                KeyPlaceholder::PlainKey { key_index, num1, num2 } => {
+                    let key_info = key_information
+                        .get(*key_index as usize)
+                        .ok_or("Invalid key index")
+                        .map(|key_info| key_info.to_string());
 
-            let key_info = key_info?;
+                    let key_info = key_info?;
 
-            let change_step = if is_change {
-                key_placeholder.num1
-            } else {
-                key_placeholder.num2
-            };
-            Ok(format!("{}/{}/{}", key_info, change_step, address_index))
+                    let change_step = if is_change { num1 } else { num2 };
+                    Ok(format!("{}/{}/{}", key_info, change_step, address_index))
+                }
+                KeyPlaceholder::Musig { key_indices, num1, num2 } => {
+                    let mut musig_keys = String::new();
+                    for (i, key_index) in key_indices.iter().enumerate() {
+                        if i > 0 {
+                            musig_keys.push_str(", ");
+                        }
+                        musig_keys.push_str(&format!("@{}", key_index));
+                    }
+        
+                    let change_step = if is_change { num1 } else { num2 };
+                    Ok(format!(
+                        "musig({})/<{};{}>/*",
+                        musig_keys, change_step, address_index
+                    ))
+                }
+            }
         };
 
         // converts a slice of placeholder to its string expression in a descriptor
@@ -1257,7 +1309,7 @@ mod tests {
         let test_cases_success = vec![
             (
                 "@0/**",
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 0,
                     num1: 0,
                     num2: 1,
@@ -1265,7 +1317,7 @@ mod tests {
             ),
             (
                 "@4294967295/**",
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 4294967295,
                     num1: 0,
                     num2: 1,
@@ -1273,7 +1325,7 @@ mod tests {
             ), // u32::MAX
             (
                 "@1/<0;1>/*",
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 1,
                     num1: 0,
                     num2: 1,
@@ -1281,7 +1333,7 @@ mod tests {
             ),
             (
                 "@2/<3;4>/*",
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 2,
                     num1: 3,
                     num2: 4,
@@ -1289,10 +1341,26 @@ mod tests {
             ),
             (
                 "@3/<1;9>/*",
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 3,
                     num1: 1,
                     num2: 9,
+                },
+            ),
+            (
+                "musig(@0,@1)/**",
+                KeyPlaceholder::Musig {
+                    key_indices: vec![0, 1],
+                    num1: 0,
+                    num2: 1,
+                },
+            ),
+            (
+                "musig(@3,@7,@8)/<11;42>/*",
+                KeyPlaceholder::Musig {
+                    key_indices: vec![3, 7, 8],
+                    num1: 11,
+                    num2: 42,
                 },
             ),
         ];
@@ -1309,8 +1377,15 @@ mod tests {
             "@0/*",
             "@0/<0;1>",       // missing /*
             "@0/<0,1>/*",     // , instead of ;
+            "@0/<0';1>/*",    // hardened steps not allowed here
+            "@0/<0;1'>/*",    // hardened steps not allowed here
+            "@0/<0;1>'/*",    // hardened steps not allowed here
             "@4294967296/**", // too large
             "0/**",
+            "musig(@0,@1)/*",
+            "musig(@0,@1)/<0;1>",
+            "musig(@0,@1)/<0';1>/*",
+            "musig(@0,@1)/<0;1'>/*",
         ];
 
         for input in test_cases_err {
@@ -1326,12 +1401,12 @@ mod tests {
             DescriptorTemplate::Sortedmulti(
                 2,
                 vec![
-                    KeyPlaceholder {
+                    KeyPlaceholder::PlainKey {
                         key_index: 0,
                         num1: 0,
                         num2: 1,
                     },
-                    KeyPlaceholder {
+                    KeyPlaceholder::PlainKey {
                         key_index: 1,
                         num1: 0,
                         num2: 1,
@@ -1350,12 +1425,12 @@ mod tests {
             DescriptorTemplate::Wsh(Box::new(DescriptorTemplate::Sortedmulti(
                 2,
                 vec![
-                    KeyPlaceholder {
+                    KeyPlaceholder::PlainKey {
                         key_index: 0,
                         num1: 0,
                         num2: 1,
                     },
-                    KeyPlaceholder {
+                    KeyPlaceholder::PlainKey {
                         key_index: 1,
                         num1: 0,
                         num2: 1,
@@ -1372,7 +1447,7 @@ mod tests {
         let expected = Ok((
             "",
             DescriptorTemplate::Tr(
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 0,
                     num1: 0,
                     num2: 1,
@@ -1386,13 +1461,13 @@ mod tests {
         let expected = Ok((
             "",
             DescriptorTemplate::Tr(
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 0,
                     num1: 0,
                     num2: 1,
                 },
                 Some(TapTree::Script(Box::new(DescriptorTemplate::Pkh(
-                    KeyPlaceholder {
+                    KeyPlaceholder::PlainKey {
                         key_index: 1,
                         num1: 0,
                         num2: 1,
@@ -1406,21 +1481,21 @@ mod tests {
         let expected = Ok((
             "",
             DescriptorTemplate::Tr(
-                KeyPlaceholder {
+                KeyPlaceholder::PlainKey {
                     key_index: 0,
                     num1: 2,
                     num2: 1,
                 },
                 Some(TapTree::Branch(
                     Box::new(TapTree::Script(Box::new(DescriptorTemplate::Pkh(
-                        KeyPlaceholder {
+                        KeyPlaceholder::PlainKey {
                             key_index: 1,
                             num1: 2,
                             num2: 7,
                         },
                     )))),
                     Box::new(TapTree::Script(Box::new(DescriptorTemplate::Sh(Box::new(
-                        DescriptorTemplate::Wpkh(KeyPlaceholder {
+                        DescriptorTemplate::Wpkh(KeyPlaceholder::PlainKey {
                             key_index: 2,
                             num1: 0,
                             num2: 1,
@@ -1642,7 +1717,23 @@ mod tests {
     #[test]
     fn test_descriptortemplate_placeholders_iterator() {
         fn format_kp(kp: &KeyPlaceholder) -> String {
-            format!("@{}/<{};{}>/*", kp.key_index, kp.num1, kp.num2)
+            match kp {
+                KeyPlaceholder::PlainKey { key_index, num1, num2 } => format!("@{}/<{};{}>/*", key_index, num1, num2),
+                KeyPlaceholder::Musig { key_indices, num1, num2 } => {
+                    let mut musig_keys = String::new();
+                    for (i, key_index) in key_indices.iter().enumerate() {
+                        if i > 0 {
+                            musig_keys.push_str(",");
+                        }
+                        musig_keys.push_str(&format!("@{}", key_index));
+                    }
+        
+                    format!(
+                        "musig({})/<{};{}>/*",
+                        musig_keys, num1, num2
+                    )                    
+                }
+            }
         }
 
         struct TestCase {
@@ -1673,6 +1764,10 @@ mod tests {
             TestCase::new(
                 "tr(@0/**,{{{sortedmulti_a(1,@1/**,@2/**,@3/**,@4/**,@5/**),multi_a(2,@6/**,@7/**,@8/**)},{multi_a(2,@9/**,@10/**,@11/**,@12/**),pk(@13/**)}},{{multi_a(2,@14/**,@15/**),multi_a(3,@16/**,@17/**,@18/**)},{multi_a(2,@19/**,@20/**),pk(@21/**)}}})",
                 &["@0/<0;1>/*", "@1/<0;1>/*", "@2/<0;1>/*", "@3/<0;1>/*", "@4/<0;1>/*", "@5/<0;1>/*", "@6/<0;1>/*", "@7/<0;1>/*", "@8/<0;1>/*", "@9/<0;1>/*", "@10/<0;1>/*", "@11/<0;1>/*", "@12/<0;1>/*", "@13/<0;1>/*", "@14/<0;1>/*", "@15/<0;1>/*", "@16/<0;1>/*", "@17/<0;1>/*", "@18/<0;1>/*", "@19/<0;1>/*", "@20/<0;1>/*", "@21/<0;1>/*"]
+            ),
+            TestCase::new(
+                "tr(musig(@0,@1)/**,pk(@2/**))",
+                &["musig(@0,@1)/<0;1>/*", "@2/<0;1>/*"]
             ),
         ];
 

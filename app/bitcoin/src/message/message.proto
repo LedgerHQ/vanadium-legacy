@@ -57,13 +57,32 @@ message RequestSignPsbt {
 }
 
 message PartialSignature {
-  bytes signature = 1;
-  bytes public_key = 2;
-  bytes leaf_hash = 3; // Optional. If it's not set, it will have the default value (empty).
+  uint32 input_index = 1;
+  bytes signature = 2;
+  bytes public_key = 3;
+  bytes leaf_hash = 4; // Optional. If it's not set, it will have the default value (empty).
+}
+
+message MusigPublicNonce {
+  uint32 input_index = 1;
+  bytes pubnonce = 2;  // 66 bytes, concatenation of two pubkeys
+  bytes participant_public_key = 3;
+  bytes xonly_key = 4;
+  bytes leaf_hash = 5; // Optional. If it's not set, it will have the default value (empty).
+}
+
+message MusigPartialSignature {
+  uint32 input_index = 1;
+  bytes signature = 2;  // 32-bytes partial signature
+  bytes participant_public_key = 3;
+  bytes xonly_key = 4;
+  bytes leaf_hash = 5; // Optional. If it's not set, it will have the default value (empty).
 }
 
 message ResponseSignPsbt {
   repeated PartialSignature partial_signatures = 1;
+  repeated MusigPublicNonce musig_public_nonces = 2;
+  repeated MusigPartialSignature musig_partial_signatures = 3;
 }
 
 

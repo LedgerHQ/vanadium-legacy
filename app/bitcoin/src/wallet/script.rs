@@ -1,4 +1,3 @@
-use core::convert::TryInto;
 use core::str::FromStr;
 
 use alloc::{boxed::Box, vec, vec::Vec};
@@ -8,11 +7,15 @@ use bitcoin::opcodes::{all::*, OP_0};
 use bitcoin::script::Builder;
 use bitcoin::{PubkeyHash, ScriptBuf, ScriptHash, WPubkeyHash, WScriptHash};
 
+use schnorr_fun::fun::Point;
+use schnorr_fun::musig::new_with_deterministic_nonces;
+
 use vanadium_sdk::crypto::EcfpPublicKey;
 
 use crate::crypto::{hash160, sha256};
 
 use crate::taproot::GetTapTreeHash;
+use crate::wallet::MySha256;
 use crate::wallet::bip32::ExtendedPubKey;
 
 use crate::{
@@ -26,6 +29,7 @@ const MAX_PUBKEYS_PER_MULTI_A: usize = 999;
 pub trait ToScript {
     fn to_script(&self, is_change: bool, address_index: u32) -> Result<ScriptBuf, &'static str>;
 }
+
 
 pub trait ToScriptWithKeyInfo {
     fn to_script(
@@ -91,13 +95,58 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
         ctx: ScriptContext,
     ) -> Result<Builder, &'static str> {
         let derive = |kp: &KeyPlaceholder| -> Result<ExtendedPubKey, &'static str> {
-            let change_step = if is_change { kp.num2 } else { kp.num1 };
+            let root_pubkey: ExtendedPubKey = match kp {
+                KeyPlaceholder::PlainKey { key_index, num1: _, num2: _ } => {
+                    let key_info = key_information
+                        .get(*key_index as usize)
+                        .ok_or("Invalid key index")?;
 
-            let key_info = key_information
-                .get(kp.key_index as usize)
-                .ok_or("Invalid key index")?;
+                    ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?
+                },
+                KeyPlaceholder::Musig { key_indices, num1: _, num2: _ } => {
+                    if ctx != ScriptContext::None && ctx != ScriptContext::Tr {
+                        // TODO: this is not quite correct, as it would allow musig in top-level fragments like pkh(@0), which is wrong
+                        return Err("musig is only allowed in taproot")
+                    }
 
-            let root_pubkey = ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
+                    let musig = schnorr_fun::musig::new_without_nonce_generation::<MySha256>();
+
+                    let root_pubkeys = key_indices.iter()
+                        .map(|k| {
+                            let key_info = key_information
+                                .get(*k as usize)
+                                .ok_or("Invalid key index")?;
+
+                            let root_pubkey = ExtendedPubKey::from_str(&key_info.pubkey).map_err(|_| "Invalid pubkey")?;
+                            Point::from_bytes_uncompressed(*root_pubkey.public_key.as_bytes())
+                                .ok_or("Failed to derive key")
+
+                        })
+                        .collect::<Result<Vec<Point>, &str>>()?;
+
+                    let agg_key_bytes = musig
+                        .new_agg_key(root_pubkeys)
+                        .into_xonly_key()
+                        .agg_public_key().to_bytes_uncompressed();
+                    let agg_key = EcfpPublicKey::from_slice(&agg_key_bytes)
+                        .map_err(|_| "Failed to generate aggregate pubkey")?;
+
+                    ExtendedPubKey {
+                        network: 0x043587CFu32, // TODO: support other networks
+                        depth: 0,
+                        parent_fingerprint: [0u8; 4],
+                        child_number: 0,
+                        public_key: agg_key,
+                        chain_code: crate::wallet::musig::MUSIG_AGGR_CHAINCODE,
+                    }
+                },
+            };
+
+            let (num1, num2) = match kp {
+                KeyPlaceholder::PlainKey { key_index: _, num1, num2 } => (num1, num2),
+                KeyPlaceholder::Musig { key_indices: _, num1, num2 } => (num1, num2),
+            };
+            let change_step = if is_change { *num2 } else { *num1 };
 
             root_pubkey
                 .derive_pub(&vec![change_step, address_index])
@@ -254,7 +303,7 @@ impl ToScriptWithKeyInfoInner for DescriptorTemplate {
             DescriptorTemplate::One => builder.push_opcode(OP_PUSHNUM_1),
             DescriptorTemplate::Pk(k) => {
                 // c:pk_k(key)
-                let desc = DescriptorTemplate::C(Box::new(DescriptorTemplate::Pk_k(*k)));
+                let desc = DescriptorTemplate::C(Box::new(DescriptorTemplate::Pk_k(k.clone())));
                 desc.to_script_inner(key_information, is_change, address_index, builder, ctx)?
             }
             DescriptorTemplate::Pk_k(kp) => {
